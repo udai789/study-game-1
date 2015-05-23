@@ -9,10 +9,16 @@
  *サンプルを使用しています
  */
 
-
+#include <UISlider.h>
 #include "SceneGameMain.h"
+#include "SimpleAudioEngine.h"
+#include "cocostudio/CocoStudio.h"
+#include "ui/CocosGUI.h"
 
 USING_NS_CC;
+
+const float STANDARD_BGM_VOLUME=0.03f;//初期BGM音量
+const float STANDARD_EFFECTS_VOLUME=0.5f;//初期効果音音量
 
 SceneGameMain::SceneGameMain()
 :_turnCounter(0)
@@ -56,6 +62,9 @@ bool SceneGameMain::initWithLevel(int level)
     this->createMap(level);//ステージマップ
     this->createLabelLayer();//ラベルレイヤーを作成
     this->createPlayers();//プレイヤーを作成
+    
+    CocosDenshion::SimpleAudioEngine::getInstance()->setBackgroundMusicVolume(STANDARD_BGM_VOLUME);//bgm音量設定
+    CocosDenshion::SimpleAudioEngine::getInstance()->setEffectsVolume(STANDARD_EFFECTS_VOLUME);//効果音の音量
     
     auto tileTouchListener=EventListenerTouchOneByOne::create();
     //タッチ開始
@@ -120,7 +129,9 @@ bool SceneGameMain::initWithLevel(int level)
                     }
                 }else{//クリックした位置に船は無い
                     _gameState=GameState::ACTION;
-                    if(_stage->tileMoveCheck(position) && distance<=fune->getMovement()){//移動
+                    //if(_stage->tileMoveCheck(position) && distance<=fune->getMovement()){//移動
+                    if(distance<=fune->getMovement() &&
+                       _stage->getAStar()->checkLine(fune->getTiledMapPosition(),position,fune->getMovement())){//移動可
                         _stage->markerShow(Stage::MapMarkerTypes::REDCROSS,position);
                         this->scheduleOnce(
                                            [this,fune,position](float dt){
@@ -153,6 +164,12 @@ bool SceneGameMain::initWithLevel(int level)
     
     this->beginGame();
     return true;
+}
+
+void SceneGameMain::onEnterTransitionDidFinish()
+{
+    Layer::onEnterTransitionDidFinish();
+    CocosDenshion::SimpleAudioEngine::getInstance()->playBackgroundMusic("music/highseas.mp3",true);
 }
 
 void SceneGameMain::createMap(int level)
@@ -207,6 +224,7 @@ void SceneGameMain::createLabelLayer()
     
     this->createTurnLabel();
     this->createPlayerLabel();
+    this->createSettingButton();
 }
 
 void SceneGameMain::createTurnLabel()
@@ -227,6 +245,28 @@ void SceneGameMain::createPlayerLabel()
     playerLabel->setPosition(Vec2(64,10));
     this->setPlayerLabel(playerLabel);
     _labelLayer->addChild(playerLabel);
+}
+
+void SceneGameMain::createSettingButton()
+{
+    auto winSize=Director::getInstance()->getWinSize();
+    //設定画面を開くボタンを作成
+    auto button=MenuItemImage::create("images/settings.png","images/settings.png",
+                                      [this](Ref* ref){
+                                          this->createSettingWindow();
+                                      });
+    button->runAction(RepeatForever::create(RotateBy::create(10,360)));
+    auto menu=Menu::create(button,NULL);
+    menu->setPosition(Vec2(winSize.width-40,40));
+    _labelLayer->addChild(menu);
+    
+    //メニューと明記
+    auto label=Label::createWithSystemFont("MENU","Arial",24);
+    label->setColor(Color3B::ORANGE);
+    label->enableOutline(Color4B::BLACK);
+    label->enableShadow(Color4B::BLACK,Size(0.5,0.5),3);
+    label->setPosition(Vec2(winSize.width-40,25));
+    _labelLayer->addChild(label);
 }
 
 void SceneGameMain::createPlayers()
@@ -267,9 +307,9 @@ void SceneGameMain::updateUi()
 void SceneGameMain::beginGame()
 {
     _gameState=GameState::GAMESTART;
-    //船初期配置
-    Vec2 stagePosition[2][4]={{Vec2(0,8),Vec2(0,6),Vec2(1,7),Vec2(2,8)},
-        {Vec2(12,0),Vec2(10,0),Vec2(11,1),Vec2(12,2)}};
+    //船初期配置 vec2(0,8) vec2(12,0)
+    Vec2 stagePosition[2][4]={{Vec2(5,4),Vec2(0,6),Vec2(1,7),Vec2(2,8)},
+        {Vec2(6,4),Vec2(10,0),Vec2(11,1),Vec2(12,2)}};
     
     for(auto pi=0;pi<this->getPlayerListCount();pi++){
         auto player=this->getPlayer(pi);
@@ -449,4 +489,140 @@ void SceneGameMain::attack(Fune *attackFune,Fune *defenseFune)
             }
         }));
     }));
+}
+
+void SceneGameMain::createSettingWindow()
+{
+    /*関数定義
+     *設定画面のレイヤー作成
+     *設定画面の画像作成
+     *BGM設定
+     *効果音設定
+     *設定画面を閉じるボタン設定
+     *アニメーションなど一時停止、効果音のみ一時停止
+     */
+    auto audio=CocosDenshion::SimpleAudioEngine::getInstance();
+    
+    ////関数
+    //音量をスライダーの値に変換
+    auto convertToSliderPercent=[](float volume)->int{
+        int percent=static_cast<int>(volume*100);
+        percent=std::max(0,percent);//0以上
+        percent=std::min(100,percent);//100以下
+        return percent;
+    };
+    //スライダーの値を音量に変換
+    auto convertToVolume=[](int percent)->float{
+        float volume=static_cast<float>(percent)/100.f;
+        volume=std::min(1.0f,volume);//1以下
+        volume=std::max(0.0f,volume);//0以上
+        return volume;
+    };
+    //音量を設定 volumeType true:BGM false:effect
+    auto setVolume=[audio,convertToVolume](bool volumeType,int percent,ui::Text* label){
+        auto volume=convertToVolume(percent);
+        label->setString(StringUtils::toString(percent));
+        if(volumeType){
+            audio->setBackgroundMusicVolume(volume);
+        }else{
+            audio->setEffectsVolume(volume);
+        }
+    };
+    //スライダーの値が変化したときのイベント slider:イベントを設定するスライダー label:スライダーの数値を表示するラベル
+    //volumeType true:BGM false:effect
+    auto setChangeSliderEvent=[audio,setVolume](ui::Slider* slider,ui::Text* label,bool volumeType){
+        slider->addEventListener([audio,setVolume,label,volumeType](Ref* pSlider,ui::Slider::EventType type){
+            if(type==ui::Slider::EventType::ON_PERCENTAGE_CHANGED){//スライダーの値が変化したなら
+                auto slider=dynamic_cast<ui::Slider*>(pSlider);
+                setVolume(volumeType,slider->getPercent(),label);
+            }
+        });
+    };
+    //音量を調整するボタンにタッチイベントを設定
+    //button:設定するボタン slider:音量を表すスライダー label:音量を表すラベル
+    //value:増減する値 volumeType true:BGM false:effect
+    auto setVolumeButton=[setVolume](ui::Button* button,ui::Slider* slider,ui::Text* label,int value,bool volumeType){
+        button->addTouchEventListener(
+          [setVolume,slider,label,value,volumeType](Ref* pButton,ui::Widget::TouchEventType type)
+        {
+            auto button=dynamic_cast<ui::Button*>(pButton);
+            if(type==ui::Widget::TouchEventType::BEGAN){//タッチ開始時
+                button->setColor(Color3B::GRAY);
+            }
+            if(type==ui::Widget::TouchEventType::ENDED){//タッチ終了時
+                slider->setPercent(slider->getPercent()+value);
+                setVolume(volumeType,slider->getPercent(),label);
+                button->setColor(Color3B::WHITE);
+            }
+            if(type==ui::Widget::TouchEventType::CANCELED){//タッチキャンセル
+                button->setColor(Color3B::WHITE);
+            }
+        });
+    };
+    //end/関数
+    
+    
+    ////設定画面の作成
+    auto settingLayer=Layer::create();
+    //レイヤーの下にタッチイベントが伝播しないようにする pause中でもタッチイベントは発生する
+    auto listener=EventListenerTouchOneByOne::create();
+    listener->setSwallowTouches(true);
+    listener->onTouchBegan=[](Touch* touch,Event* event){return true;};
+    Director::getInstance()->getEventDispatcher()->addEventListenerWithSceneGraphPriority(listener,settingLayer);
+    
+    auto window=CSLoader::getInstance()->createNode("SettingLayer.csb");
+    settingLayer->addChild(window);
+    //end/設定画面の作成
+    
+    
+    
+    ////BGM設定
+    auto bgmValueLabel=window->getChildByName<ui::Text*>("BGMValue");//BGMValueラベルの設定
+    //値の更新
+    bgmValueLabel->setString(StringUtils::toString(convertToSliderPercent(audio->getBackgroundMusicVolume())));
+    auto bgmSlider=window->getChildByName<ui::Slider*>("BGMSlider");//bgmスライドバーの設定
+    bgmSlider->setPercent(convertToSliderPercent(audio->getBackgroundMusicVolume()));//バーの位置を調整
+    setChangeSliderEvent(bgmSlider,bgmValueLabel,true);//バーの値が変わった時のイベントを設定
+    auto BGMUpButton=window->getChildByName<ui::Button*>("BGMUpButton");//bgm音量を上げるボタン
+    setVolumeButton(BGMUpButton,bgmSlider,bgmValueLabel,1,true);
+    auto BGMDownButton=window->getChildByName<ui::Button*>("BGMDownButton");//bgm音量を下げるボタン
+    setVolumeButton(BGMDownButton,bgmSlider,bgmValueLabel,-1,true);
+    //end/BGM設定
+    
+    ////効果音設定
+    auto effectsValueLabel=window->getChildByName<ui::Text*>("EffectsValue");//EffectsValueラベルの設定
+    //値の更新
+    effectsValueLabel->setString(StringUtils::toString(convertToSliderPercent(audio->getEffectsVolume())));
+    auto effectsSlider=window->getChildByName<ui::Slider*>("EffectsSlider");//効果音スライドバーの設定
+    effectsSlider->setPercent(convertToSliderPercent(audio->getEffectsVolume()));//バーの位置を調整
+    setChangeSliderEvent(effectsSlider,effectsValueLabel,false);//バーの値が変わった時のイベントを設定
+    auto effectsUpButton=window->getChildByName<ui::Button*>("EffectsUpButton");//効果音音量を上げるボタン
+    setVolumeButton(effectsUpButton,effectsSlider,effectsValueLabel,1,false);
+    auto effectsDownButton=window->getChildByName<ui::Button*>("EffectsDownButton");//効果音音量を下げるボタン
+    setVolumeButton(effectsDownButton,effectsSlider,effectsValueLabel,-1,false);
+    //end/効果音設定
+    
+    
+    
+    //設定画面を閉じるボタンの設定
+    auto backButton=window->getChildByName<ui::Button*>("backButton");
+    backButton->addTouchEventListener([this,settingLayer,audio](Ref* pButton,ui::Widget::TouchEventType type){
+        auto button=dynamic_cast<ui::Button*>(pButton);
+        if(type==ui::Widget::TouchEventType::BEGAN){//タッチ開始
+            button->setColor(Color3B::GRAY);
+        }
+        if(type==ui::Widget::TouchEventType::ENDED){//タッチ終了
+            Director::getInstance()->getEventDispatcher()->removeEventListenersForTarget(settingLayer);//レイヤーのイベント削除
+            settingLayer->removeFromParent();//レイヤーを消す
+            Director::getInstance()->resume();//再開
+            audio->resumeAllEffects();//効果音再開
+        }
+        if(type==ui::Widget::TouchEventType::CANCELED){//タッチキャンセル
+            button->setColor(Color3B::WHITE);
+        }
+    });
+    
+    this->addChild(settingLayer,static_cast<int>(LayerZPositions::SETTING));
+    Director::getInstance()->pause();//一時停止
+    audio->pauseAllEffects();//効果音のみ停止
 }

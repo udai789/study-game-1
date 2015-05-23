@@ -9,6 +9,7 @@
 #include "Stage.h"
 #include "cocostudio/CocoStudio.h"
 #include "ui/CocosGUI.h"
+#include "SimpleAudioEngine.h"
 
 USING_NS_CC;
 
@@ -25,6 +26,7 @@ Stage::Stage()
 ,_areaRangeLayer(nullptr)
 ,_unitLayer(nullptr)
 ,_helpLayer(nullptr)
+,_aStar(nullptr)
 ,_level(0)
 {
     
@@ -37,6 +39,7 @@ Stage::~Stage()
     CC_SAFE_RELEASE_NULL(_areaRangeLayer);
     CC_SAFE_RELEASE_NULL(_unitLayer);
     CC_SAFE_RELEASE_NULL(_helpLayer);
+    CC_SAFE_RELEASE_NULL(_aStar);
 }
 
 Stage* Stage::createWithLevel(int level)
@@ -64,6 +67,8 @@ bool Stage::initWithLevel(int level)
     this->createMarkerLayer();//マーカーレイヤー作成
     
     this->createUnitLayer();//ユニットレイヤーの作成
+    
+    this->createAStar();//試験中 探索マップを作成
     
     return true;
 }
@@ -117,6 +122,44 @@ void Stage::createUnitLayer()
     auto unitLayer=Layer::create();
     this->setUnitLayer(unitLayer);
     this->addChild(unitLayer,static_cast<int>(LayerZPositions::UNIT));
+}
+
+void Stage::createAStar()
+{
+    auto mapSize=_tiledMap->getMapSize();//マップの大きさ
+    auto aStar=AStar::create(mapSize);//探索マップを作成
+    this->setAStar(aStar);
+    
+    //各タイル(点)を作成
+    for(int j=0;j<mapSize.height;j++){
+        for(int i=0;i<mapSize.width;i++){
+            auto type=this->getTileType(Vec2(i,j));//この座標のタイルタイプ
+            int inCost=1;//そのタイルに入るコスト
+            int outCost=0;//そのタイルから出るコスト
+            //タイルの種類によってコストを調整
+            switch (type) {
+                case TileTypes::IWA:
+                case TileTypes::RIKU:
+                    inCost=AStar::getMaxCost();//コストを最大に設定
+                    outCost=AStar::getMaxCost();
+                    break;
+                    
+                case TileTypes::ASAI:
+                    inCost=2;
+                    break;
+                    
+                case TileTypes::ARAI:
+                    outCost=2;
+                    break;
+                    
+                default:
+                    break;
+            }
+            if(!aStar->addPoint(Vec2(i,j),inCost,outCost)){
+                log("Stage::createAStar() aStar->addPoint() ERROR");
+            }
+        }
+    }
 }
 
 bool Stage::tileMoveCheck(const Vec2 &position)
@@ -194,6 +237,7 @@ void Stage::positionFune(Fune *fune,const Vec2 &position)
 
 void Stage::moveFuneAnimation(Fune *fune,const cocos2d::Vec2 &position,cocos2d::CallFunc *callfunc)
 {
+    /*
     auto distance=this->getDistance(fune->getTiledMapPosition(),position);
     auto duration=std::min(1.2,distance*0.3);
     fune->setLocalZOrder(100);
@@ -204,6 +248,44 @@ void Stage::moveFuneAnimation(Fune *fune,const cocos2d::Vec2 &position,cocos2d::
                                      CallFunc::create([this,fune,position]{
         fune->setLocalZOrder(0);
         this->positionFune(fune,position);}
+                                                      ),
+                                     callfunc,NULL));
+     */
+    auto duration=0.4f;
+    auto line=this->getAStar()->search(fune->getTiledMapPosition(),position,fune->getMovement());
+    Vector<FiniteTimeAction*> move;
+    for(int i=1;i<line.size();i++){//先頭は船の現在地のため1から
+        auto movePosition=line.at(i);//移動先
+        auto anotherFune=this->getOnTiledMapFune(movePosition);//移動先に他の船がいるか
+        if(anotherFune){
+            auto ve=movePosition-line.at(i-1);
+            if(ve.y<0){//下からマスに入る場合
+                //移動する船を下にし、移動終了後上にする
+                move.pushBack(CallFunc::create([fune,anotherFune]{
+                    fune->setLocalZOrder(1);//2箇所連続の場合に前の船の下に回り込むのを回避
+                    anotherFune->setLocalZOrder(100);
+                }));
+                move.pushBack(MoveTo::create(duration,this->convertToStageSpace(movePosition)));
+                move.pushBack(CallFunc::create([fune,anotherFune]{
+                    fune->setLocalZOrder(100);
+                    anotherFune->setLocalZOrder(0);//zを0に戻しておく
+                }));
+            }else{//下から入らない場合 移動する船を上にする
+                move.pushBack(CallFunc::create([fune]{
+                    fune->setLocalZOrder(100);
+                }));
+                move.pushBack(MoveTo::create(duration,this->convertToStageSpace(movePosition)));
+            }
+        }else{
+            move.pushBack(MoveTo::create(duration,this->convertToStageSpace(movePosition)));
+        }
+    }
+    
+    fune->runAction(Sequence::create(Sequence::create(move),
+                                     CallFunc::create([this,fune,position]{
+        fune->setLocalZOrder(0);//zを0に戻しておく
+        this->positionFune(fune,position);
+    }
                                                       ),
                                      callfunc,NULL));
 }
@@ -236,7 +318,9 @@ void Stage::markerShow(Stage::MapMarkerTypes markerType,const Vec2 &position)
 void Stage::setMarker(Fune *fune,const cocos2d::Vec2 &position)
 {
     auto distance=this->getDistance(position,fune->getTiledMapPosition());
-    if(this->tileMoveCheck(position) && distance<=fune->getMovement()){
+    //if(this->tileMoveCheck(position) && distance<=fune->getMovement()){
+    if(distance<=fune->getMovement() &&
+       this->getAStar()->checkLine(fune->getTiledMapPosition(),position,fune->getMovement())){
         this->markerShow(Stage::MapMarkerTypes::REDCROSS,position);
     }else{
         this->markerShow(Stage::MapMarkerTypes::GRAYCROSS,position);
@@ -261,7 +345,9 @@ void Stage::createAreaRangeLayer(Fune *fune)
                 continue;
             }
             //移動可能なタイルなら青、不可なら赤
-            auto cover=this->tileMoveCheck(position) ? Stage::MapMarkerTypes::BLUECOVER : Stage::MapMarkerTypes::REDCOVER;
+            //auto cover=this->tileMoveCheck(position) ? Stage::MapMarkerTypes::BLUECOVER : Stage::MapMarkerTypes::REDCOVER;
+            auto cover=this->getAStar()->checkLine(fune->getTiledMapPosition(),position,fune->getMovement()) ?
+                Stage::MapMarkerTypes::BLUECOVER : Stage::MapMarkerTypes::REDCOVER;
             auto sprite=Sprite::create("images/mapui.png",Rect(
                                                            tileSize.width*static_cast<int>(cover),0,
                                                            tileSize.width,tileSize.height
@@ -481,6 +567,21 @@ void Stage::effectExplosion(const Vec2 &position,CallFunc* callfunc)
     sprite->setPosition(this->convertToStageSpace(position));
     _unitLayer->addChild(sprite);
     
+    
+    auto animation1=Animation::createWithSpriteFrames(frames1,5.0/60.0);
+    //爆発エフェクトと効果音を同時に
+    auto spawn=Spawn::create(
+                         CallFunc::create([]{
+        CocosDenshion::SimpleAudioEngine::getInstance()->playEffect("sound/bomb1.wav");
+    }),
+                         Animate::create(animation1),NULL);
+    auto repeat=Repeat::create(spawn,3);//3回繰り返す
+    auto animation2=Animation::createWithSpriteFrames(frames2,5.0/60.0);
+    sprite->runAction(Sequence::create(repeat,
+                                       Animate::create(animation2),
+                                       RemoveSelf::create(),
+                                       callfunc,NULL));
+    /*
     auto animation1=Animation::createWithSpriteFrames(frames1,5.0/60.0);
     animation1->setLoops(3);//3回繰り返し
     auto animation2=Animation::createWithSpriteFrames(frames2,5.0/60.0);
@@ -488,6 +589,7 @@ void Stage::effectExplosion(const Vec2 &position,CallFunc* callfunc)
                                        Animate::create(animation2),
                                        RemoveSelf::create(),
                                        callfunc,NULL));
+     */
 }
 
 void Stage::damageLabel(Fune *fune,std::string string,cocos2d::CallFunc *callfunc)

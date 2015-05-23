@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include "cocos2d.h"
 #include "Fune.h"
+#include "AStar.h"
 
 class Stage :public cocos2d::Layer
 {
@@ -27,6 +28,8 @@ protected:
     void createMarkerLayer();
     //ユニットレイヤーの作成
     void createUnitLayer();
+    //探索マップを作成
+    void createAStar();
     
 public:
     //レイヤーの重なり
@@ -50,8 +53,8 @@ public:
     
     //マップマーカーの種類
     enum class MapMarkerTypes{
-        REDCROSS,//赤い×マーク
-        GRAYCROSS,//灰色の×マーク
+        REDCROSS,//赤い×マーク 変更不可 createMarkerLayerの変更が必要
+        GRAYCROSS,//灰色の×マーク 変更不可 createMarkerLayerの変更が必要
         BLUECOVER,//青いカバー
         REDCOVER,//赤いカバー
         COUNT//マーカーの数
@@ -72,6 +75,7 @@ public:
     //船を配置するレイヤー
     CC_SYNTHESIZE_RETAIN(cocos2d::Layer*,_unitLayer,UnitLayer);
     CC_SYNTHESIZE_RETAIN(cocos2d::Layer*,_helpLayer,HelpLayer);//ヘルプを表示するレイヤー
+    CC_SYNTHESIZE_RETAIN(AStar*,_aStar,AStar);//探索マップ
     //CREATE_FUNC(Stage);
     
     /*ステージ番号からステージを生成します

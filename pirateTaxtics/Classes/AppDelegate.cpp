@@ -1,6 +1,7 @@
 #include "AppDelegate.h"
 //#include "HelloWorldScene.h"
 #include "SceneGameMain.h"
+#include "SimpleAudioEngine.h"
 
 USING_NS_CC;
 
@@ -70,6 +71,7 @@ void AppDelegate::applicationDidEnterBackground() {
 
     // if you use SimpleAudioEngine, it must be pause
     // SimpleAudioEngine::getInstance()->pauseBackgroundMusic();
+    CocosDenshion::SimpleAudioEngine::getInstance()->pauseBackgroundMusic();//アプリが裏に回った時bgmを停止する
 }
 
 // this function will be called when the app is active again
@@ -78,4 +80,5 @@ void AppDelegate::applicationWillEnterForeground() {
 
     // if you use SimpleAudioEngine, it must resume here
     // SimpleAudioEngine::getInstance()->resumeBackgroundMusic();
+    CocosDenshion::SimpleAudioEngine::getInstance()->resumeBackgroundMusic();//アプリが表に出た時bgmを再開する
 }

@@ -33,6 +33,7 @@ protected:
         NORMAL,//標準
         STAGE,//ステージ
         LABEL,//ラベル
+        SETTING,//設定画面
         RESULT//リザルト
     };
     
@@ -79,6 +80,7 @@ protected:
     void createLabelLayer();//ラベルを表示するレイヤーを作成
     void createTurnLabel();//ターンを表示するラベルを作成
     void createPlayerLabel();//現在のプレイヤーを表示するラベルを作成
+    void createSettingButton();//ゲームの設定を呼び出すボタンを作成
     void createPlayers();//参加するプレイヤーを作成する
     
     void updateTurnLabel();//現在の_turnCounterの値に更新する
@@ -98,7 +100,7 @@ protected:
      */
     void attack(Fune* attackFune,Fune* defenseFune);
     
-    
+    void createSettingWindow();//設定画面を作成する
     
 public:
     //static cocos2d::Scene* createScene();//このクラスのインスタンスを持つsceneを返す
@@ -107,6 +109,7 @@ public:
      *@return シーン
      */
     static cocos2d::Scene* createSceneWithLevel(int level);
+    void onEnterTransitionDidFinish() override;//トランジション終了時に実行される
     
     CC_SYNTHESIZE(cocos2d::Vector<Player*>,_playerList,PlayerList);//プレイヤーを保持するベクター
     CC_SYNTHESIZE(int,_turnCounter,turnCounter);//現在のターン数を保持
