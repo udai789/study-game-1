@@ -11,18 +11,18 @@
 USING_NS_CC;
 
 ////MPoint
-AStar::MPoint::MPoint()
+MPoint::MPoint()
 :_flag(false)
 {
     
 }
 
-AStar::MPoint::~MPoint()
+MPoint::~MPoint()
 {
     
 }
 
-AStar::MPoint* AStar::MPoint::create(const Vec2& position,const int &inCost,const int &outCost)
+MPoint* MPoint::create(const Vec2& position,const int &inCost,const int &outCost)
 {
     MPoint* ret=new MPoint();
     if(ret->init(position,inCost,outCost)){
@@ -34,7 +34,7 @@ AStar::MPoint* AStar::MPoint::create(const Vec2& position,const int &inCost,cons
     return nullptr;
 }
 
-bool AStar::MPoint::init(const Vec2 &position,const int &inCost,const int &outCost)
+bool MPoint::init(const Vec2 &position,const int &inCost,const int &outCost)
 {
     if(inCost<1 || outCost<0){return false;}//inCostが1未満もしくはoutCostが負の値のときfalse
     _position=position;
@@ -56,7 +56,7 @@ AStar::PointCost::~PointCost()
     CC_SAFE_RELEASE_NULL(_mPoint);
 }
 
-AStar::PointCost* AStar::PointCost::create(AStar::MPoint* mPoint,const int &realCost,const int& estimateCost)
+AStar::PointCost* AStar::PointCost::create(MPoint* mPoint,const int &realCost,const int& estimateCost)
 {
     PointCost* ret=new PointCost();
     if(ret->init(mPoint,realCost,estimateCost)){
@@ -68,7 +68,7 @@ AStar::PointCost* AStar::PointCost::create(AStar::MPoint* mPoint,const int &real
     return nullptr;
 }
 
-bool AStar::PointCost::init(AStar::MPoint* mPoint,const int &realCost,const int& estimateCost)
+bool AStar::PointCost::init(MPoint* mPoint,const int &realCost,const int& estimateCost)
 {
     if(!mPoint){return false;}
     this->setMPoint(mPoint);
@@ -89,6 +89,7 @@ AStar::AStar()
 ,_minOutCost(AStar::getMaxCost())
 ,_minCost(AStar::getMaxCost())
 ,_hasCost(0)
+,_endPosition(Vec2(0,0))
 {
     
 }
@@ -98,10 +99,10 @@ AStar::~AStar()
     
 }
 
-AStar* AStar::create(const Size &size)
+AStar* AStar::create()
 {
     AStar* ret=new AStar();
-    if(ret->init(size)){
+    if(ret->init()){
         ret->autorelease();
         return ret;
     }
@@ -110,13 +111,8 @@ AStar* AStar::create(const Size &size)
     return nullptr;
 }
 
-bool AStar::init(const Size &size)
+bool AStar::init()
 {
-    auto width=std::floor(size.width);
-    auto height=std::floor(size.height);
-    if(width<1 || height<1){return false;}//width,heightが1未満のときfalse
-    if(width!=size.width || height!=size.height){return false;}//widthとheightが整数で無ければfalse
-    _size=size;
     return true;
 }
 
@@ -126,7 +122,7 @@ bool AStar::checkSafePosition(const Vec2 &position)
     auto y=std::abs(std::floor(position.y));
     
     if(x==position.x && y==position.y){//x,y共に0または正の整数ならば
-        if(x<_size.width && y<_size.height){//x,y共にマップ内の座標ならば
+        if(x<AStar::getMaxSize() && y<AStar::getMaxSize()){
             return true;
         }
     }
@@ -137,7 +133,7 @@ bool AStar::checkSafePosition(const Vec2 &position)
 bool AStar::checkExistMPoint(const Vec2 &position)
 {
     if(this->checkSafePosition(position)){//座標が正規のものか
-        if(_mPoints.at(this->createKey(position))){//その座標の点が存在するか
+        if(_mPoints.at(AStar::createKey(position))){//その座標の点が存在するか
             return true;
         }
     }
@@ -146,7 +142,7 @@ bool AStar::checkExistMPoint(const Vec2 &position)
 
 int AStar::createKey(const Vec2 &position)
 {
-    return static_cast<int>(position.x+position.y*_size.width);
+    return static_cast<int>(position.x+position.y*AStar::getMaxSize());
 }
 
 int AStar::getNormalDistance(const Vec2 &position1,const Vec2 &position2)
@@ -154,13 +150,13 @@ int AStar::getNormalDistance(const Vec2 &position1,const Vec2 &position2)
     auto v=position1-position2;
     auto distance=std::abs(v.x)+std::abs(v.y);
     
-    return static_cast<int>(distance*_minInCost);
+    return static_cast<int>(distance*(_minInCost+_minOutCost));
 }
 
 int AStar::getRealDistance(const Vec2 &startPosition,const Vec2 &nextPosition)
 {
-    auto outCost=_mPoints.at(this->createKey(startPosition))->getOutCost();//現在の点から出るコスト
-    auto inCost=_mPoints.at(this->createKey(nextPosition))->getInCost();//次の点に入るコスト
+    auto outCost=_mPoints.at(AStar::createKey(startPosition))->getOutCost();//現在の点から出るコスト
+    auto inCost=_mPoints.at(AStar::createKey(nextPosition))->getInCost();//次の点に入るコスト
     
     return outCost+inCost;
 }
@@ -258,7 +254,7 @@ std::vector<Vec2> AStar::searchN(AStar::PointCost *pointCost)
     for(int i=0;i<nextPosition.size();i++){
         auto next=nextPosition.at(i);
         this->addPointCostVector(pointCostVector,
-                                 PointCost::create(_mPoints.at(this->createKey(next)),
+                                 PointCost::create(_mPoints.at(AStar::createKey(next)),
                                                    pointCost->getRealCost()+this->getRealDistance(position,next),
                                                    this->getNormalDistance(next,_endPosition)
                                                    ));
@@ -310,7 +306,7 @@ bool AStar::searchNCheckLine(AStar::PointCost *pointCost)
     for(int i=0;i<nextPosition.size();i++){
         auto next=nextPosition.at(i);
         this->addPointCostVector(pointCostVector,
-                                 PointCost::create(_mPoints.at(this->createKey(next)),
+                                 PointCost::create(_mPoints.at(AStar::createKey(next)),
                                                    pointCost->getRealCost()+this->getRealDistance(position,next),
                                                    this->getNormalDistance(next,_endPosition)
                                                    ));
@@ -326,20 +322,60 @@ bool AStar::searchNCheckLine(AStar::PointCost *pointCost)
     return false;//見つからなかったためfalse
 }
 
-bool AStar::addPoint(const Vec2 &position,const int &inCost,const int &outCost)
+bool AStar::createMPoint(Map<int,MPoint*>& map,const Vec2 &position,const int &inCost,const int &outCost)
 {
-    if(this->checkSafePosition(position)){//座標に問題が無ければ
+    if(AStar::checkSafePosition(position)){//座標に問題が無ければ
         auto point=MPoint::create(position,inCost,outCost);
         
         if(point){//点の作成ができたら
-            _mPoints.insert(this->createKey(position),point);
-            if(inCost<_minInCost){_minInCost=inCost;}//点のうち一番小さいinCostを設定
-            if(outCost<_minOutCost){_minOutCost=outCost;}//点のうち一番小さいoutCostを設定
+            auto key=AStar::createKey(position);
+            if(map.at(key)){map.erase(key);}//既に点がある場合削除する
+            map.insert(key,point);
             return true;
         }
     }
     
     return false;
+}
+
+bool AStar::setOutCost(Map<int, MPoint *> &map,const Vec2 &position,const int &outCost)
+{
+    if(AStar::checkSafePosition(position)){
+        auto point=map.at(AStar::createKey(position));
+        if(point){
+            point->setOutCost(outCost);
+            return true;
+        }
+    }
+    return false;
+}
+
+Map<int,MPoint*> AStar::copyMap(const Map<int, MPoint*> &map)
+{
+    Map<int,MPoint*> cMap;
+    
+    for(auto& key : map.keys()){
+        auto point=map.at(key);
+        AStar::createMPoint(cMap,point->getPosition(),point->getInCost(),point->getOutCost());
+    }
+    
+    return std::move(cMap);
+}
+
+void AStar::setMap(Map<int, MPoint *> mPoints)
+{
+    _mPoints=std::move(mPoints);
+    _minInCost=AStar::getMaxCost();
+    _minOutCost=AStar::getMaxCost();
+    for(auto& key : _mPoints.keys()){
+        auto mPoint=_mPoints.at(key);
+        if(mPoint->getInCost()<_minInCost){
+            _minInCost=mPoint->getInCost();
+        }
+        if(mPoint->getOutCost()<_minOutCost){
+            _minOutCost=mPoint->getOutCost();
+        }
+    }
 }
 
 std::vector<Vec2> AStar::search(const Vec2 &startPosition,const Vec2 &endPosition,const int &hasCost)
@@ -359,7 +395,7 @@ std::vector<Vec2> AStar::search(const Vec2 &startPosition,const Vec2 &endPositio
     if(distance>hasCost){return std::move(result);}
     
     //startPositionから探査開始
-    result=this->searchN(PointCost::create(_mPoints.at(createKey(startPosition)),0,distance));
+    result=this->searchN(PointCost::create(_mPoints.at(AStar::createKey(startPosition)),0,distance));
     std::reverse(std::begin(result),std::end(result));//終点から開始点の順なので逆転する
     return std::move(result);
 }
@@ -380,6 +416,6 @@ bool AStar::checkLine(const Vec2 &startPosition,const Vec2 &endPosition,const in
     if(distance>hasCost){return false;}
     
     //startPositionから探査開始
-    return searchNCheckLine(PointCost::create(_mPoints.at(createKey(startPosition)),0,distance));
+    return searchNCheckLine(PointCost::create(_mPoints.at(AStar::createKey(startPosition)),0,distance));
 }
 //end/Astar

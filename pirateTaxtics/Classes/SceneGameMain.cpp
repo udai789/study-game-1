@@ -416,6 +416,7 @@ void SceneGameMain::updateTurn()
     
     auto player=this->getActivePlayer();
     auto fune=player->getActiveFuneA();
+    _stage->setAStarMap(fune,player->getFuneList());
     _stage->createAreaRangeLayer(fune);
     
     _gameState=GameState::INPUTWAITING;

@@ -127,10 +127,10 @@ void Stage::createUnitLayer()
 void Stage::createAStar()
 {
     auto mapSize=_tiledMap->getMapSize();//マップの大きさ
-    auto aStar=AStar::create(mapSize);//探索マップを作成
+    auto aStar=AStar::create();//探索マップを作成
+    Map<int,MPoint*> map;
     this->setAStar(aStar);
-    
-    //各タイル(点)を作成
+    //各_orisinalAStarMap用のマップを作成
     for(int j=0;j<mapSize.height;j++){
         for(int i=0;i<mapSize.width;i++){
             auto type=this->getTileType(Vec2(i,j));//この座標のタイルタイプ
@@ -155,11 +155,12 @@ void Stage::createAStar()
                 default:
                     break;
             }
-            if(!aStar->addPoint(Vec2(i,j),inCost,outCost)){
+            if(!aStar->createMPoint(map,Vec2(i,j),inCost,outCost)){
                 log("Stage::createAStar() aStar->addPoint() ERROR");
             }
         }
     }
+    _orisinalAStarMap=map;
 }
 
 bool Stage::tileMoveCheck(const Vec2 &position)
@@ -608,4 +609,28 @@ void Stage::damageLabel(Fune *fune,std::string string,cocos2d::CallFunc *callfun
     label->runAction(Sequence::create(MoveBy::create(0.5f,Vec2(0,32)),
                                       RemoveSelf::create(),
                                       callfunc,NULL));
+}
+
+void Stage::setAStarMap(const Fune *activeFune,const Vector<Fune *>& activePlayerFuneList)
+{
+    Map<int,MPoint*> map;//作成するマップ
+    map=AStar::copyMap(_orisinalAStarMap);//基本のマップをコピー
+    
+    std::vector<Vec2> diffVec;
+    diffVec.push_back(Vec2(0,-1));//上
+    diffVec.push_back(Vec2(1,-1));//右上
+    diffVec.push_back(Vec2(1,0));//右
+    diffVec.push_back(Vec2(1,1));//右下
+    diffVec.push_back(Vec2(0,1));//下
+    diffVec.push_back(Vec2(-1,1));//左下
+    diffVec.push_back(Vec2(-1,0));//左
+    diffVec.push_back(Vec2(-1,-1));//左上
+    //zocエリアの作成 船の周囲8マスに作成 zocエリアからは出られない
+    for(auto& fune : _funeList){
+        if(activePlayerFuneList.contains(fune)){continue;}//自軍側の船は無視する
+        for(int i=0;i<diffVec.size();i++){
+            AStar::setOutCost(map,fune->getTiledMapPosition()+diffVec.at(i),AStar::getMaxCost());
+        }
+    }
+    _aStar->setMap(map);
 }

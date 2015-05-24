@@ -60,6 +60,8 @@ public:
         COUNT//マーカーの数
     };
     
+    cocos2d::Map<int,MPoint*> _orisinalAStarMap;//_tiledMapの情報のみで作成した探索用マップ 状況に合わせたマップはこれをコピーして作成
+    
     //マップの番号
     CC_SYNTHESIZE_READONLY(int,_level,Level);
     
@@ -75,7 +77,7 @@ public:
     //船を配置するレイヤー
     CC_SYNTHESIZE_RETAIN(cocos2d::Layer*,_unitLayer,UnitLayer);
     CC_SYNTHESIZE_RETAIN(cocos2d::Layer*,_helpLayer,HelpLayer);//ヘルプを表示するレイヤー
-    CC_SYNTHESIZE_RETAIN(AStar*,_aStar,AStar);//探索マップ
+    CC_SYNTHESIZE_RETAIN(AStar*,_aStar,AStar);//探査アルゴリズム
     //CREATE_FUNC(Stage);
     
     /*ステージ番号からステージを生成します
@@ -204,5 +206,11 @@ public:
      *@param callfunc アニメーション後に呼び出す処理
      */
     void damageLabel(Fune* fune,std::string string,cocos2d::CallFunc* callfunc);
+    
+    /*探索マップを作成し探索アルゴリズムにセットする
+     *@param activeFune 選択中の船
+     *@param activePlayerFuneList 行動中のプレイヤーの船リスト
+     */
+    void setAStarMap(const Fune* activeFune,const cocos2d::Vector<Fune*>& activePlayerFuneList);
 };
 #endif /* defined(__pirateTaxtics__Stage__) */

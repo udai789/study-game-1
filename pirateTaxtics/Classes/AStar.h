@@ -24,33 +24,34 @@
 
 #endif /* defined(__pirateTaxtics__AStar__) */
 
+//点を表すクラス
+class MPoint :public cocos2d::Ref
+{
+protected:
+    MPoint();
+    virtual ~MPoint();
+    bool init(const cocos2d::Vec2& position,const int& inCost,const int& outCost);
+    
+public:
+    CC_SYNTHESIZE(cocos2d::Vec2,_position,Position);//点の座標
+    CC_SYNTHESIZE(int,_inCost,InCost);//この点に入るためのコスト
+    CC_SYNTHESIZE(int,_outCost,OutCost);//この点から出るためのコスト
+    CC_SYNTHESIZE(bool,_flag,Flag);//現在の探査ルートで通過済み
+    
+    /*点を作成する
+     *@param position 点の座標
+     *@param inCost 点に入るコスト 正の整数(inCost>=1)
+     *@param outCost 点から出るコスト 0か正の整数(outCost>=0)
+     *@return 点
+     */
+    static MPoint* create(const cocos2d::Vec2& position,
+                          const int& inCost,const int& outCost);
+};
 
 class AStar :public cocos2d::Ref
 {
 protected:
-    //点を表すクラス
-    class MPoint :public cocos2d::Ref
-    {
-    protected:
-        MPoint();
-        virtual ~MPoint();
-        bool init(const cocos2d::Vec2& position,const int& inCost,const int& outCost);
-        
-    public:
-        CC_SYNTHESIZE(cocos2d::Vec2,_position,Position);//点の座標
-        CC_SYNTHESIZE(int,_inCost,InCost);//この点に入るためのコスト
-        CC_SYNTHESIZE(int,_outCost,OutCost);//この点から出るためのコスト
-        CC_SYNTHESIZE(bool,_flag,Flag);//現在の探査ルートで通過済み
-        
-        /*点を作成する
-         *@param position 点の座標
-         *@param inCost 点に入るコスト 正の整数(inCost>=1)
-         *@param outCost 点から出るコスト 0か正の整数(outCost>=0)
-         *@return 点
-         */
-        static MPoint* create(const cocos2d::Vec2& position,
-                              const int& inCost,const int& outCost);
-    };
+    
     
     //現在の点の座標,現在の点までの実際のコストを格納するクラス
     class PointCost :public cocos2d::Ref
@@ -61,7 +62,7 @@ protected:
         bool init(MPoint* mPoint,const int& realCost,const int& estimateCost);
         
     public:
-        CC_SYNTHESIZE_RETAIN(AStar::MPoint*,_mPoint,MPoint);//現在の座標の点
+        CC_SYNTHESIZE_RETAIN(MPoint*,_mPoint,MPoint);//現在の座標の点
         CC_SYNTHESIZE_READONLY(int,_realCost,RealCost);//現在の座標までの実際のコスト
         CC_SYNTHESIZE_READONLY(int,_estimateCost,EstimateCost);//現在の座標から終点の座標までの予想コスト
         
@@ -85,14 +86,14 @@ protected:
     
     AStar();
     virtual ~AStar();
-    bool init(const cocos2d::Size& size);
+    bool init();
     
     /*渡された座標がこのインスタンスで使用する条件を満たしているか
      *.x,.yの値が0または正の整数である。
      *@param position 他のクラスなどから受け取った座標
      *@return true:満たしている false:満たしていない
      */
-    bool checkSafePosition(const cocos2d::Vec2& position);
+    static bool checkSafePosition(const cocos2d::Vec2& position);
     
     /*渡された座標にMPointが存在するか
      *@param position 調べる座標
@@ -100,11 +101,7 @@ protected:
      */
     bool checkExistMPoint(const cocos2d::Vec2& position);
     
-    /*座標から_mPointsのキーを作成する
-     *@param position 点の座標
-     *@return この座標のキー値
-     */
-    int createKey(const cocos2d::Vec2& position);
+    
     
     /*_minInCostを用いて2点間の最小距離(最小コスト)を求める
      *@param position1 座標1
@@ -143,23 +140,49 @@ protected:
     bool searchNCheckLine(PointCost* pointCost);
     
 public:
-    CC_SYNTHESIZE_READONLY(cocos2d::Size,_size,Size);//マップの大きさ
-    
     /*探索マップを作成
-     *@param size マップの大きさ
      *@return 作成した探索マップ
      */
-    static AStar* create(const cocos2d::Size& size);
+    static AStar* create();
     
-    static int getMaxCost(){return 10000;};//コストの最大値を返す
+    static int getMaxSize(){return 10000;};//縦横の最大値
+    static int getMaxCost(){return AStar::getMaxSize()*AStar::getMaxSize();};//コストの最大値を返す
     
-    /*マップに点を作成する
+    /*座標から_mPointsのキーを作成する
+     *@param position 点の座標
+     *@return この座標のキー値
+     */
+    static int createKey(const cocos2d::Vec2& position);
+    
+    /*点を作成し渡されたmapに格納する 探査用のマップはこの関数で各点を作成する
+     *@param map 点を格納するmap
      *@param position 点の座標 x,yは0か正の整数
      *@param inCost 点に入るコスト 正の整数(inCost>=1)
      *@param outCost 点から出るコスト 0か正の整数(outCost>=0)
      *@return 作成に成功したか true:成功 false:失敗
      */
-    bool addPoint(const cocos2d::Vec2& position,const int& inCost,const int& outCost);
+    static bool createMPoint(cocos2d::Map<int,MPoint*>& map,const cocos2d::Vec2& position,
+                      const int& inCost,const int& outCost);
+    
+    /*渡されたマップの指定した位置のoutCostに値を設定する 点が存在しなければfalseを返す
+     *@param map 点を格納するマップ
+     *@param position 点の座標 x,yは0か正の整数
+     *@param outCost 点から出るコスト 0か正の整数(outCost>=0)
+     *@return 設定できればtrue 点が見つからない場合false
+     */
+    static bool setOutCost(cocos2d::Map<int,MPoint*>& map,const cocos2d::Vec2& position,const int& outCost);
+    
+    /*渡されたマップの内容をコピーして返す MPointの各インスタンスの内容をコピー
+     *@param map コピーするマップ
+     *@return 複製されたマップ
+     */
+    static cocos2d::Map<int,MPoint*> copyMap(const cocos2d::Map<int,MPoint*>& map);
+    
+    /*マップをセットする
+     *@param mPoints 点の集合
+     */
+    void setMap(cocos2d::Map<int,MPoint*> mPoints);
+    
     
     /*最短経路を探す
      *@param startPosition 開始位置
