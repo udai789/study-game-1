@@ -18,12 +18,17 @@ class Player :public cocos2d::Ref
 protected:
     Player();
     virtual ~Player();
-    bool init();
+    //bool init();
+    bool init(bool isCPU);
     
 public:
+    
+    CC_SYNTHESIZE_READONLY(bool,_isCPU,IsCPU);//プレイヤーがCPUか ture:CPU
     CC_SYNTHESIZE(cocos2d::Vector<Fune*>,_funeList,FuneList);//プレイヤーに属する船
     CC_SYNTHESIZE_RETAIN(Fune*,_activeFune,ActiveFune);//プレイヤーが選択中の船
-    CREATE_FUNC(Player);
+    
+    //CREATE_FUNC(Player);
+    static Player* create(bool isCPU);//isCPU プレイヤーがCPUか true:CPU
     
     /*船をプレイヤーに所属させる
      *@param fune このプレイヤーに持たせる船

@@ -36,7 +36,10 @@ public:
     CC_SYNTHESIZE_READONLY(int,_attack,Attack);//攻撃力
     CC_SYNTHESIZE_READONLY(int,_defense,Defense);//防御力
     CC_SYNTHESIZE_READONLY(int,_maxHp,MaxHP);//最大HP
-    CC_SYNTHESIZE(int,_hp,Hp);//現在のHP
+    CC_SYNTHESIZE_READONLY(int,_hp,Hp);//現在のHP
+    CC_SYNTHESIZE_READONLY(int,_skillCount,SkillCount);//スキル使用可能回数 1で初期化
+    
+    CC_SYNTHESIZE(bool,_isInvincible,IsInvincible);//無敵状態かどうか
     
     CC_SYNTHESIZE_RETAIN(cocos2d::Sprite*,_hpGauge,HpGauge);//現在のHPを表すゲージ
     
@@ -57,6 +60,13 @@ public:
     
     void updateHpGauge();//hpゲージを更新する
     
+    /*hpを変化させる
+     *@param damage hpの変化値 回復する場合は値を負の値にする
+     */
+    void receiveDamage(int damage);
+    
+    void useSkill(){_skillCount-=1;};//スキルを使用した時に呼び出す スキル使用回数を1減らす
+    
     /*沈没表現
      *@param アニメーション終了時の処理
      */
@@ -66,6 +76,5 @@ protected:
     Fune();
     virtual ~Fune();
     bool initWithLevel(CharacterTypes type);
-    
 };
 #endif /* defined(__pirateTaxtics__Fune__) */

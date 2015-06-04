@@ -18,7 +18,9 @@ const int NORMAL_FRAME_COUNT=4;
 const int CHARACTER_COUNT=8;
 
 Fune::Fune()
-:_hpGauge(nullptr)
+:_skillCount(1)
+,_isInvincible(false)
+,_hpGauge(nullptr)
 {
     
 }
@@ -123,54 +125,6 @@ bool Fune::initWithLevel(Fune::CharacterTypes type)
     animation->setDelayPerUnit(0.3);
     this->runAction(RepeatForever::create(Animate::create(animation)));
     
-    /*
-    frames.pushBack(SpriteFrame::create("images/ships.png",Rect(frameSize.width,frameSize.height*level,
-                                                                frameSize.width,frameSize.height)));
-    frames.pushBack(SpriteFrame::create("images/ships.png",Rect(frameSize.width*2,frameSize.height*level,
-                                                                frameSize.width,frameSize.height)));
-    frames.pushBack(SpriteFrame::create("images/ships.png",Rect(frameSize.width,frameSize.height*level,
-                                                                frameSize.width,frameSize.height)));
-    frames.pushBack(SpriteFrame::create("images/ships.png",Rect(0,frameSize.height*level,
-                                                                frameSize.width,frameSize.height)));
-    frames.pushBack(SpriteFrame::create("images/ships.png",Rect(frameSize.width*3,frameSize.height*level,
-                                                                frameSize.width,frameSize.height)));
-     */
-    
-    /*
-     for(int i=0;i<NORMAL_FRAME_COUNT;i++){
-     //1コマずつアニメーションを作成する
-     auto frame=SpriteFrame::create("images/ships.png",Rect(frameSize.width*i,frameSize.height*level,
-     frameSize.width,frameSize.height));
-     frames.pushBack(frame);
-     }*/
-    /*
-    Vector<AnimationFrame*> frames;
-    ValueMap userInfo;
-    userInfo["size"]=Value("0");
-    auto spriteFrame0=SpriteFrame::create("images/ships.png",Rect(0,frameSize.height*level,
-                                                     frameSize.width,frameSize.height));
-    auto animationFrame0=AnimationFrame::create(spriteFrame0,4,userInfo);
-    frames.pushBack(animationFrame0);
-    auto spriteFrame1=SpriteFrame::create("images/ships.png",Rect(frameSize.width,frameSize.height*level,
-                                                                  frameSize.width,frameSize.height));
-    auto animationFrame1=AnimationFrame::create(spriteFrame1,3,userInfo);
-    frames.pushBack(animationFrame1);
-    auto spriteFrame2=SpriteFrame::create("images/ships.png",Rect(frameSize.width*2,frameSize.height*level,
-                                                                  frameSize.width,frameSize.height));
-    auto animationFrame2=AnimationFrame::create(spriteFrame2,2,userInfo);
-    frames.pushBack(animationFrame2);
-    auto animationFrame3=AnimationFrame::create(spriteFrame1,2,userInfo);
-    frames.pushBack(animationFrame3);
-    auto animationFrame4=AnimationFrame::create(spriteFrame0,4,userInfo);
-    frames.pushBack(animationFrame4);
-    auto spriteFrame3=SpriteFrame::create("images/ships.png",Rect(frameSize.width*3,frameSize.height*level,
-                                                                  frameSize.width,frameSize.height));
-    auto animationFrame5=AnimationFrame::create(spriteFrame3,3,userInfo);
-    frames.pushBack(animationFrame5);
-    
-    auto animation=Animation::create(frames,1);*/
-    ////*/キャラクターの基本アニメーション作成
-    
     ///HPゲージの作成
     auto hpBack=Sprite::create("images/healthBack.png");
     hpBack->setAnchorPoint(Vec2::ANCHOR_MIDDLE_LEFT);
@@ -200,6 +154,13 @@ void Fune::updateHpGauge()
     _hpGauge->setScale(hpGagueWidthRate,1);
 }
 
+void Fune::receiveDamage(int damage)
+{
+    auto hp=_hp-damage;
+    hp=std::max(hp,0);
+    hp=std::min(hp,_maxHp);
+    _hp=hp;
+}
 
 void Fune::sinkShip(CallFunc* callfunc)
 {
@@ -216,6 +177,7 @@ void Fune::sinkShip(CallFunc* callfunc)
     auto animation=Animation::createWithSpriteFrames(sinkFrames,15.0/60.0);
     this->stopAllActions();
     this->runAction(Sequence::create(Animate::create(animation),
+                                     RemoveSelf::create(),
                                      callfunc,
                                      NULL));
 }

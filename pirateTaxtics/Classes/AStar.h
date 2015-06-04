@@ -172,6 +172,14 @@ public:
      */
     static bool setOutCost(cocos2d::Map<int,MPoint*>& map,const cocos2d::Vec2& position,const int& outCost);
     
+    /*渡されたマップの指定した位置のinCostに値を設定する 点が存在しなければfalseを返す
+     *@param map 点を格納するマップ
+     *@param position 点の座標 x,yは0か正の整数
+     *@param inCost 点から出るコスト 0か正の整数(inCost>=1)
+     *@return 設定できればtrue 点が見つからない場合false
+     */
+    static bool setInCost(cocos2d::Map<int,MPoint*>& map,const cocos2d::Vec2& position,const int& inCost);
+    
     /*渡されたマップの内容をコピーして返す MPointの各インスタンスの内容をコピー
      *@param map コピーするマップ
      *@return 複製されたマップ

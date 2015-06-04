@@ -21,8 +21,22 @@ Player::~Player()
     CC_SAFE_RELEASE_NULL(_activeFune);
 }
 
-bool Player::init()
+Player* Player::create(bool isCPU)
 {
+    Player* ret=new Player();
+    if(ret->init(isCPU)){
+        ret->autorelease();
+        return ret;
+    }
+    
+    CC_SAFE_RELEASE_NULL(ret);
+    return nullptr;
+}
+
+//bool Player::init()
+bool Player::init(bool isCPU)
+{
+    _isCPU=isCPU;
     return true;
 }
 

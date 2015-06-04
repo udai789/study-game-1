@@ -340,11 +340,27 @@ bool AStar::createMPoint(Map<int,MPoint*>& map,const Vec2 &position,const int &i
 
 bool AStar::setOutCost(Map<int, MPoint *> &map,const Vec2 &position,const int &outCost)
 {
-    if(AStar::checkSafePosition(position)){
-        auto point=map.at(AStar::createKey(position));
-        if(point){
-            point->setOutCost(outCost);
-            return true;
+    if(outCost>=0){
+        if(AStar::checkSafePosition(position)){
+            auto point=map.at(AStar::createKey(position));
+            if(point){
+                point->setOutCost(outCost);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool AStar::setInCost(Map<int, MPoint *> &map,const Vec2 &position,const int &inCost)
+{
+    if(inCost>=1){
+        if(AStar::checkSafePosition(position)){
+            auto point=map.at(AStar::createKey(position));
+            if(point){
+                point->setInCost(inCost);
+                return true;
+            }
         }
     }
     return false;

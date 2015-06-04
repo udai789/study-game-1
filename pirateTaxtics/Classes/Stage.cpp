@@ -23,9 +23,9 @@ const int MAP_POSITION_LEFT=64;//マップの画面左からの位置
 Stage::Stage()
 :_tiledMap(nullptr)
 ,_makerLayer(nullptr)
-,_areaRangeLayer(nullptr)
 ,_unitLayer(nullptr)
-,_helpLayer(nullptr)
+,_effectLayer(nullptr)
+,_messageLayer(nullptr)
 ,_aStar(nullptr)
 ,_level(0)
 {
@@ -36,9 +36,9 @@ Stage::~Stage()
 {
     CC_SAFE_RELEASE_NULL(_tiledMap);
     CC_SAFE_RELEASE_NULL(_makerLayer);
-    CC_SAFE_RELEASE_NULL(_areaRangeLayer);
     CC_SAFE_RELEASE_NULL(_unitLayer);
-    CC_SAFE_RELEASE_NULL(_helpLayer);
+    CC_SAFE_RELEASE_NULL(_effectLayer);
+    CC_SAFE_RELEASE_NULL(_messageLayer);
     CC_SAFE_RELEASE_NULL(_aStar);
 }
 
@@ -68,11 +68,17 @@ bool Stage::initWithLevel(int level)
     
     this->createUnitLayer();//ユニットレイヤーの作成
     
-    this->createAStar();//試験中 探索マップを作成
+    this->createEffectLayer();//エフェクトレイヤーの作成
+    this->createMessageLayer();//メッセージレイヤーの作成
+    
+    this->createAStar();//探索マップを作成
     
     return true;
 }
 
+
+
+////初期化処理
 void Stage::createMap()
 {
     //画面のサイズを取り出す
@@ -124,6 +130,20 @@ void Stage::createUnitLayer()
     this->addChild(unitLayer,static_cast<int>(LayerZPositions::UNIT));
 }
 
+void Stage::createEffectLayer()
+{
+    auto effectLayer=Layer::create();
+    this->setEffectLayer(effectLayer);
+    this->addChild(effectLayer,static_cast<int>(LayerZPositions::EFFECT));
+}
+
+void Stage::createMessageLayer()
+{
+    auto messageLayer=Layer::create();
+    this->setMessageLayer(messageLayer);
+    this->addChild(messageLayer,static_cast<int>(LayerZPositions::MESSAGE));
+}
+
 void Stage::createAStar()
 {
     auto mapSize=_tiledMap->getMapSize();//マップの大きさ
@@ -162,17 +182,11 @@ void Stage::createAStar()
     }
     _orisinalAStarMap=map;
 }
+//end/初期化処理
 
-bool Stage::tileMoveCheck(const Vec2 &position)
-{
-    auto tileType=this->getTileType(position);
-    if(tileType==TileTypes::IWA || tileType==TileTypes::RIKU || tileType==TileTypes::NONE){
-        return false;
-    }
-    
-    return true;
-}
 
+
+////座標関係
 Vec2 Stage::convertToTiledMapSpace(const Vec2 &stagePosition)
 {
     auto winSize=Director::getInstance()->getWinSize();//画面サイズ
@@ -200,6 +214,12 @@ Vec2 Stage::convertToStageSpace(const cocos2d::Vec2 &position)
     return std::move(Vec2(x,y));
 }
 
+int Stage::getDistance(const Vec2 &position1,const Vec2 &position2)
+{
+    auto distance=std::abs(position1.x-position2.x)+std::abs(position1.y-position2.y);
+    return distance;
+}
+
 Stage::TileTypes Stage::getTileType(const Vec2 &position)
 {
     auto gid=_tiledMap->getLayer(MAP_LAYER_NAME)->getTileGIDAt(position);//positionにあるタイルのidを取得
@@ -209,6 +229,16 @@ Stage::TileTypes Stage::getTileType(const Vec2 &position)
     }
     
     return TileTypes::NONE;
+}
+
+bool Stage::tileMoveCheck(const Vec2 &position)
+{
+    auto tileType=this->getTileType(position);
+    if(tileType==TileTypes::IWA || tileType==TileTypes::RIKU || tileType==TileTypes::NONE){
+        return false;
+    }
+    
+    return true;
 }
 
 bool Stage::onTiledMapCheck(const Vec2 &stagePosition)
@@ -229,6 +259,98 @@ void Stage::positionObject(Sprite* sprite,const Vec2 &position)
     auto stagePosition=this->convertToStageSpace(position);
     sprite->setPosition(stagePosition);
 }
+//end/座標関係
+
+
+
+////marker関係
+void Stage::markerHide()
+{
+    for(auto i=0;i<2;i++){
+        _makerLayer->getChildByTag(i)->setVisible(false);
+    }
+}
+
+void Stage::markerShow(Stage::MapMarkerTypes markerType,const Vec2 &position)
+{
+    //ばつマーカーでない場合は終了
+    if(!(markerType==MapMarkerTypes::REDCROSS || markerType==MapMarkerTypes::GRAYCROSS)){
+        return;
+    }
+    this->markerHide();
+    auto marker=dynamic_cast<Sprite*>(_makerLayer->getChildByTag(static_cast<int>(markerType)));
+    marker->setVisible(true);
+    this->positionObject(marker,position);
+}
+
+void Stage::setMarker(Fune *fune,const cocos2d::Vec2 &position)
+{
+    auto distance=this->getDistance(position,fune->getTiledMapPosition());
+    //if(this->tileMoveCheck(position) && distance<=fune->getMovement()){
+    if(distance<=fune->getMovement() &&
+       this->getAStar()->checkLine(fune->getTiledMapPosition(),position,fune->getMovement())){
+        this->markerShow(Stage::MapMarkerTypes::REDCROSS,position);
+    }else{
+        this->markerShow(Stage::MapMarkerTypes::GRAYCROSS,position);
+    }
+}
+//end/marker関係
+
+
+
+////areaRange関係
+void Stage::createAreaRangeLayer(Fune *fune)
+{
+    this->removeAreaRangeLayer();
+    
+    auto areaRangeLayer=Layer::create();
+    areaRangeLayer->setTag(static_cast<int>(LayerZPositions::AREARANGE));
+    auto tileSize=_tiledMap->getLayer(MAP_LAYER_NAME)->getMapTileSize();
+    //移動可能かを表すスプライトを配置
+    for(auto j=-fune->getMovement();j<=fune->getMovement();j++){
+        for(auto i=-fune->getMovement();i<=fune->getMovement();i++){
+            auto position=fune->getTiledMapPosition()+Vec2(i,j);//調べる先の座標
+            auto stagePosition=this->convertToStageSpace(position);
+            auto distance=this->getDistance(position,fune->getTiledMapPosition());
+            //移動先がタイルマップ上にないか、船の移動距離が足りなければcontinue
+            if(!this->onTiledMapCheck(stagePosition) || distance>fune->getMovement()){
+                continue;
+            }
+            //移動可能なタイルなら青、不可なら赤
+            auto cover=this->getAStar()->checkLine(fune->getTiledMapPosition(),position,fune->getMovement()) ?
+            Stage::MapMarkerTypes::BLUECOVER : Stage::MapMarkerTypes::REDCOVER;
+            auto sprite=Sprite::create("images/mapui.png",Rect(
+                                                               tileSize.width*static_cast<int>(cover),0,
+                                                               tileSize.width,tileSize.height
+                                                               ));
+            this->positionObject(sprite,position);
+            areaRangeLayer->addChild(sprite);
+        }
+    }
+    this->addChild(areaRangeLayer,static_cast<int>(LayerZPositions::AREARANGE));
+}
+
+void Stage::removeAreaRangeLayer()
+{
+    auto layer=this->getChildByTag(static_cast<int>(LayerZPositions::AREARANGE));
+    if(layer){
+        layer->removeFromParent();
+    }
+}
+//end/areaRange関係
+
+
+
+////fune関係
+void Stage::addFuneList(Fune *fune)
+{
+    _funeList.pushBack(fune);
+}
+
+void Stage::removeFuneList(Fune *fune)
+{
+    _funeList.eraseObject(fune);
+}
 
 void Stage::positionFune(Fune *fune,const Vec2 &position)
 {
@@ -236,22 +358,23 @@ void Stage::positionFune(Fune *fune,const Vec2 &position)
     fune->setTiledMapPosition(position);
 }
 
+void Stage::setFuneLayer(Fune *fune)
+{
+    _unitLayer->addChild(fune);
+}
+
+Fune* Stage::getOnTiledMapFune(cocos2d::Vec2 &position)
+{
+    for(auto& fune : _funeList){
+        if(position==fune->getTiledMapPosition()){
+            return fune;
+        }
+    }
+    return nullptr;
+}
+
 void Stage::moveFuneAnimation(Fune *fune,const cocos2d::Vec2 &position,cocos2d::CallFunc *callfunc)
 {
-    /*
-    auto distance=this->getDistance(fune->getTiledMapPosition(),position);
-    auto duration=std::min(1.2,distance*0.3);
-    fune->setLocalZOrder(100);
-    fune->runAction(Sequence::create(EaseInOut::create(
-                                                    MoveTo::create(duration,
-                                                                   this->convertToStageSpace(position)),
-                                                    duration),
-                                     CallFunc::create([this,fune,position]{
-        fune->setLocalZOrder(0);
-        this->positionFune(fune,position);}
-                                                      ),
-                                     callfunc,NULL));
-     */
     auto duration=0.4f;
     auto line=this->getAStar()->search(fune->getTiledMapPosition(),position,fune->getMovement());
     Vector<FiniteTimeAction*> move;
@@ -290,257 +413,11 @@ void Stage::moveFuneAnimation(Fune *fune,const cocos2d::Vec2 &position,cocos2d::
                                                       ),
                                      callfunc,NULL));
 }
+//end/fune関係
 
-int Stage::getDistance(const Vec2 &position1,const Vec2 &position2)
-{
-    auto distance=std::abs(position1.x-position2.x)+std::abs(position1.y-position2.y);
-    return distance;
-}
 
-void Stage::markerHide()
-{
-    for(auto i=0;i<2;i++){
-        _makerLayer->getChildByTag(i)->setVisible(false);
-    }
-}
 
-void Stage::markerShow(Stage::MapMarkerTypes markerType,const Vec2 &position)
-{
-    //ばつマーカーでない場合は終了
-    if(!(markerType==MapMarkerTypes::REDCROSS || markerType==MapMarkerTypes::GRAYCROSS)){
-        return;
-    }
-    this->markerHide();
-    auto marker=dynamic_cast<Sprite*>(_makerLayer->getChildByTag(static_cast<int>(markerType)));
-    marker->setVisible(true);
-    this->positionObject(marker,position);
-}
-
-void Stage::setMarker(Fune *fune,const cocos2d::Vec2 &position)
-{
-    auto distance=this->getDistance(position,fune->getTiledMapPosition());
-    //if(this->tileMoveCheck(position) && distance<=fune->getMovement()){
-    if(distance<=fune->getMovement() &&
-       this->getAStar()->checkLine(fune->getTiledMapPosition(),position,fune->getMovement())){
-        this->markerShow(Stage::MapMarkerTypes::REDCROSS,position);
-    }else{
-        this->markerShow(Stage::MapMarkerTypes::GRAYCROSS,position);
-    }
-}
-
-void Stage::createAreaRangeLayer(Fune *fune)
-{
-    if(_areaRangeLayer !=nullptr){
-        this->removeAreaRangeLayer();
-    }
-    auto areaRangeLayer=Layer::create();
-    auto tileSize=_tiledMap->getLayer(MAP_LAYER_NAME)->getMapTileSize();
-    //移動可能かを表すスプライトを配置
-    for(auto j=-fune->getMovement();j<=fune->getMovement();j++){
-        for(auto i=-fune->getMovement();i<=fune->getMovement();i++){
-            auto position=fune->getTiledMapPosition()+Vec2(i,j);//調べる先の座標
-            auto stagePosition=this->convertToStageSpace(position);
-            auto distance=this->getDistance(position,fune->getTiledMapPosition());
-            //移動先がタイルマップ上にないか、船の移動距離が足りなければcontinue
-            if(!this->onTiledMapCheck(stagePosition) || distance>fune->getMovement()){
-                continue;
-            }
-            //移動可能なタイルなら青、不可なら赤
-            //auto cover=this->tileMoveCheck(position) ? Stage::MapMarkerTypes::BLUECOVER : Stage::MapMarkerTypes::REDCOVER;
-            auto cover=this->getAStar()->checkLine(fune->getTiledMapPosition(),position,fune->getMovement()) ?
-                Stage::MapMarkerTypes::BLUECOVER : Stage::MapMarkerTypes::REDCOVER;
-            auto sprite=Sprite::create("images/mapui.png",Rect(
-                                                           tileSize.width*static_cast<int>(cover),0,
-                                                           tileSize.width,tileSize.height
-                                                           ));
-            this->positionObject(sprite,position);
-            areaRangeLayer->addChild(sprite);
-        }
-    }
-    
-    this->addChild(areaRangeLayer,static_cast<int>(LayerZPositions::AREARANGE));
-    this->setAreaRangeLayer(areaRangeLayer);
-}
-
-void Stage::removeAreaRangeLayer()
-{
-    if(_areaRangeLayer){
-        _areaRangeLayer->removeFromParent();
-        this->setAreaRangeLayer(nullptr);
-    }
-}
-
-void Stage::addFuneList(Fune *fune)
-{
-    _funeList.pushBack(fune);
-}
-
-void Stage::removeFuneList(Fune *fune)
-{
-    _funeList.eraseObject(fune);
-}
-
-void Stage::setFuneLayer(Fune *fune)
-{
-    _unitLayer->addChild(fune);
-}
-
-Fune* Stage::getOnTiledMapFune(cocos2d::Vec2 &position)
-{
-    for(auto& fune : _funeList){
-        if(position==fune->getTiledMapPosition()){
-            return fune;
-        }
-    }
-    return nullptr;
-}
-
-void Stage::createHelpLayer(Fune *fune)
-{
-    if(_helpLayer){
-        this->removeHelpLayer();
-    }
-    
-    auto helpLayer=Layer::create();
-    helpLayer->setColor(Color3B::GRAY);
-    helpLayer->setOpacity(0.7);
-    
-    auto winSize=Director::getInstance()->getWinSize();
-    
-    /*
-    //背景
-    auto windowSprite=Sprite::create("images/window.png");
-    windowSprite->setPosition(Vec2(winSize.width/2,winSize.height/2));
-    helpLayer->addChild(windowSprite);
-    
-    //ステータス
-    auto captainLabel=Label::createWithSystemFont(
-                                                  StringUtils::format("船長%d",static_cast<int>(fune->getType())),
-                                                  "Arial",48);
-    captainLabel->setAnchorPoint(Vec2::ANCHOR_BOTTOM_LEFT);
-    captainLabel->setPosition(Vec2(winSize.width/2-162,winSize.height/2+220));
-    helpLayer->addChild(captainLabel);
-     */
-    
-    auto window=CSLoader::getInstance()->createNode("MainScene.csb");
-    window->setScale(0.7);
-    window->runAction(ScaleTo::create(0.2,1));
-    helpLayer->addChild(window);
-    
-    //ステータス
-    //船長
-    auto captain=window->getChildByName<ui::Text*>("captainValue");
-    Sprite* characterSprite=nullptr;//キャラクターの絵
-    switch (fune->getType()) {
-        case Fune::CharacterTypes::PC_CAPTAIN:
-            captain->setString("キャプテン");
-            characterSprite=Sprite::create("images/pirate00.png");
-            break;
-            
-        case Fune::CharacterTypes::PC_SPEED:
-            captain->setString("はやいちゃん");
-            characterSprite=Sprite::create("images/pirate01.png");
-            break;
-            
-        case Fune::CharacterTypes::PC_DEFENSE:
-            captain->setString("かたいちゃん");
-            characterSprite=Sprite::create("images/pirate02.png");
-            break;
-            
-        case Fune::CharacterTypes::PC_ATTACK:
-            captain->setString("攻撃ちゃん");
-            characterSprite=Sprite::create("images/pirate03.png");
-            break;
-            
-        case Fune::CharacterTypes::ENEMY_BOSS:
-            captain->setString("ボス");
-            break;
-            
-        case Fune::CharacterTypes::ENEMY_SPEED:
-            captain->setString("スピードタイプ");
-            break;
-            
-        case Fune::CharacterTypes::ENEMY_DEFENSE:
-            captain->setString("ディフェンスタイプ");
-            break;
-            
-        case Fune::CharacterTypes::ENEMY_ATTACK:
-            captain->setString("アタックタイプ");
-            break;
-            
-        default:
-            break;
-    }
-    
-    if(characterSprite){
-        characterSprite->setPosition(Vec2(winSize.width/2+256,winSize.height/2));
-        characterSprite->setOpacity(0);
-        characterSprite->runAction(FadeIn::create(0.6));
-        helpLayer->addChild(characterSprite);
-    }
-    
-    //攻撃力
-    auto attack=window->getChildByName<ui::Text*>("attackValue");
-    attack->setString(StringUtils::toString(fune->getAttack()));
-    
-    //防御力
-    auto defense=window->getChildByName<ui::Text*>("defenseValue");
-    defense->setString(StringUtils::toString(fune->getDefense()));
-    
-    //移動力
-    auto movement=window->getChildByName<ui::Text*>("movementValue");
-    movement->setString(StringUtils::toString(fune->getMovement()));
-    
-    //攻撃の距離
-    auto range=window->getChildByName<ui::Text*>("rangeValue");
-    range->setString(StringUtils::toString(fune->getRange()));
-    
-    //hp
-    auto hp=window->getChildByName<ui::Text*>("hpValue");
-    hp->setString(StringUtils::toString(fune->getHp()));
-    
-    //maxHp
-    auto maxHp=window->getChildByName<ui::Text*>("maxHpValue");
-    maxHp->setString(StringUtils::toString(fune->getMaxHP()));
-    
-    //戻るボタン
-    auto backButton=MenuItemImage::create("images/btnCancel.png",
-                                          "images/btnCancel.png",
-                                          [this](Ref *ref){
-                                              //戻るボタンを押した時の処理
-                                              auto button=dynamic_cast<MenuItemImage*>(ref);
-                                              this->getEventDispatcher()->removeEventListenersForTarget(button);
-                                              button->runAction(Sequence::create(ScaleTo::create(0.2,1.3),
-                                                                           CallFunc::create(
-                                                                                            [this]{this->removeHelpLayer();}
-                                                                                            ),NULL));
-                                          });
-    //メニューを作成
-    auto menu=Menu::create(backButton,NULL);
-    menu->setPosition(Vec2(340,140));
-    menu->setOpacity(0);
-    menu->runAction(FadeIn::create(0.2));
-    helpLayer->addChild(menu);
-    
-    //他のタッチイベントが発生しないようにする
-    auto listener=EventListenerTouchOneByOne::create();
-    listener->setSwallowTouches(true);
-    listener->onTouchBegan=[](Touch* touch,Event* event){return true;};
-    Director::getInstance()->getEventDispatcher()->addEventListenerWithSceneGraphPriority(listener,helpLayer);
-    
-    this->addChild(helpLayer,static_cast<int>(LayerZPositions::HELP));
-    this->setHelpLayer(helpLayer);
-}
-
-void Stage::removeHelpLayer()
-{
-    if(_helpLayer){
-        Director::getInstance()->getEventDispatcher()->removeEventListenersForTarget(_helpLayer);
-        _helpLayer->removeFromParent();
-        this->setHelpLayer(nullptr);
-    }
-}
-
+////エフェクト関係
 void Stage::effectExplosion(const Vec2 &position,CallFunc* callfunc)
 {
     //アニメーションを作成
@@ -566,35 +443,46 @@ void Stage::effectExplosion(const Vec2 &position,CallFunc* callfunc)
     //表示するスプライトを作成
     auto sprite=Sprite::create("images/explosion.png",Rect(0,0,explosionSize.width,explosionSize.height));
     sprite->setPosition(this->convertToStageSpace(position));
-    _unitLayer->addChild(sprite);
     
     
     auto animation1=Animation::createWithSpriteFrames(frames1,5.0/60.0);
     //爆発エフェクトと効果音を同時に
     auto spawn=Spawn::create(
-                         CallFunc::create([]{
+                             CallFunc::create([]{
         CocosDenshion::SimpleAudioEngine::getInstance()->playEffect("sound/bomb1.wav");
     }),
-                         Animate::create(animation1),NULL);
+                             Animate::create(animation1),NULL);
     auto repeat=Repeat::create(spawn,3);//3回繰り返す
     auto animation2=Animation::createWithSpriteFrames(frames2,5.0/60.0);
     sprite->runAction(Sequence::create(repeat,
                                        Animate::create(animation2),
                                        RemoveSelf::create(),
                                        callfunc,NULL));
-    /*
-    auto animation1=Animation::createWithSpriteFrames(frames1,5.0/60.0);
-    animation1->setLoops(3);//3回繰り返し
-    auto animation2=Animation::createWithSpriteFrames(frames2,5.0/60.0);
-    sprite->runAction(Sequence::create(Animate::create(animation1),
-                                       Animate::create(animation2),
-                                       RemoveSelf::create(),
-                                       callfunc,NULL));
-     */
+    
+    _effectLayer->addChild(sprite);
 }
 
-void Stage::damageLabel(Fune *fune,std::string string,cocos2d::CallFunc *callfunc)
+void Stage::effectLabel(Fune *fune,std::string string,Color3B color,CallFunc *callFunc){
+    auto label=Label::createWithSystemFont(string,"Arial",36);
+    label->setColor(color);
+    if(fune->getPosition().x>Director::getInstance()->getWinSize().width*2/3){//画面の2/3から右側
+        label->setAnchorPoint(Vec2::ANCHOR_BOTTOM_RIGHT);
+        label->setPosition(fune->getPosition()-Vec2(32,0));
+    }else{
+        label->setAnchorPoint(Vec2::ANCHOR_MIDDLE_LEFT);
+        label->setPosition(fune->getPosition()+Vec2(32,0));
+    }
+    
+    label->runAction(Sequence::create(MoveBy::create(0.5f,Vec2(0,32)),
+                                      RemoveSelf::create(),
+                                      callFunc,NULL));
+    _messageLayer->addChild(label);
+}
+
+void Stage::damageLabel(Fune *fune,std::string string,CallFunc *callfunc)
 {
+    this->effectLabel(fune,string,Color3B::RED,callfunc);
+    /*
     auto label=Label::createWithSystemFont(string,"Arial",36);
     label->setColor(Color3B::RED);
     if(fune->getPosition().x>Director::getInstance()->getWinSize().width*2/3){//画面の2/3から右側
@@ -604,13 +492,51 @@ void Stage::damageLabel(Fune *fune,std::string string,cocos2d::CallFunc *callfun
         label->setAnchorPoint(Vec2::ANCHOR_MIDDLE_LEFT);
         label->setPosition(fune->getPosition()+Vec2(32,0));
     }
-    _unitLayer->addChild(label);
     
     label->runAction(Sequence::create(MoveBy::create(0.5f,Vec2(0,32)),
                                       RemoveSelf::create(),
                                       callfunc,NULL));
+    
+    _messageLayer->addChild(label);
+     */
 }
 
+void Stage::effectShield(Fune *fune)
+{
+    auto particle=ParticleSystemQuad::create("particle/shieldEffect.plist");
+    particle->setPosition(fune->getPosition());
+    _effectLayer->addChild(particle);
+}
+
+void Stage::effectWheel(const Vec2 &position,bool direction)
+{
+    auto sprite=Sprite::create("images/settings.png");
+    sprite->setPosition(this->convertToStageSpace(position));
+    
+    int d;
+    if(direction){
+        d=1;
+    }else{
+        d=-1;
+    }
+    
+    sprite->runAction(Sequence::create(
+                                       Spawn::create(RotateBy::create(1.0,d*360),
+                                                     CallFunc::create([]{
+        CocosDenshion::SimpleAudioEngine::getInstance()->playEffect("sound/se4.wav");
+    }),
+                                                     NULL),
+                                       RemoveSelf::create(),
+                                       NULL));
+    
+    _effectLayer->addChild(sprite);
+}
+//end/エフェクト関係
+
+
+
+
+////探索関係
 void Stage::setAStarMap(const Fune *activeFune,const Vector<Fune *>& activePlayerFuneList)
 {
     Map<int,MPoint*> map;//作成するマップ
@@ -634,3 +560,4 @@ void Stage::setAStarMap(const Fune *activeFune,const Vector<Fune *>& activePlaye
     }
     _aStar->setMap(map);
 }
+//end/探索関係

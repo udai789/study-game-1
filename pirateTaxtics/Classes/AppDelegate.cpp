@@ -1,12 +1,16 @@
 #include "AppDelegate.h"
 //#include "HelloWorldScene.h"
-#include "SceneGameMain.h"
+//#include "SceneGameMain.h"
+#include "Title.h"
 #include "SimpleAudioEngine.h"
 
 USING_NS_CC;
 
 //初期ステージ番号
-const int INITIAL_LEVEL=0;
+//const int INITIAL_LEVEL=0;
+
+const float STANDARD_BGM_VOLUME=0.03f;//初期BGM音量
+const float STANDARD_EFFECTS_VOLUME=0.5f;//初期効果音音量
 
 AppDelegate::AppDelegate() {
 
@@ -54,10 +58,14 @@ bool AppDelegate::applicationDidFinishLaunching() {
 
     // set FPS. the default value is 1.0/60 if you don't call this
     director->setAnimationInterval(1.0 / 60);
+    
+    CocosDenshion::SimpleAudioEngine::getInstance()->setBackgroundMusicVolume(STANDARD_BGM_VOLUME);//bgm音量設定
+    CocosDenshion::SimpleAudioEngine::getInstance()->setEffectsVolume(STANDARD_EFFECTS_VOLUME);//効果音の音量
 
     // create a scene. it's an autorelease object
     //auto scene = HelloWorld::createScene();
-    auto scene=SceneGameMain::createSceneWithLevel(INITIAL_LEVEL);
+    //auto scene=SceneGameMain::createSceneWithLevel(INITIAL_LEVEL);
+    auto scene=Title::createScene();
 
     // run
     director->runWithScene(scene);
