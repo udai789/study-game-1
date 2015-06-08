@@ -126,6 +126,7 @@ void Title::createTitleLayer()
     });
     
     auto storyButton=window->getChildByName<ui::Button*>("storyButton");
+    storyButton->setVisible(false);//現状消しておく
     
     this->addChild(window);
 }

@@ -250,7 +250,6 @@ void SceneGameMain::createPlayers()
     for(auto i=0;i<4;i++){
         this->createFune(player1,static_cast<Fune::CharacterTypes>(i),stagePosition[0][i]);
     }
-    setCC(player1->getFune(0));
     
     auto player2=Player::create(_gameInitialise->getIsPlayer2CPU());
     this->addPlayerList(player2);
@@ -301,6 +300,37 @@ void SceneGameMain::createFune(Player *player,Fune::CharacterTypes characterType
     player->addFuneList(fune);
     _stage->setFuneLayer(fune);
     _stage->positionFune(fune,position);
+}
+
+Vector<Fune*> SceneGameMain::getWithinRangeFuneList(Fune *attackFune)
+{
+    Vector<Fune*> targetFuneList;
+    for(auto& player:_playerList){
+        if(player->getFuneListContains(attackFune)){continue;}//自分は飛ばす
+        for(auto& targetFune:player->getFuneList()){
+            auto distance=_stage->getDistance(attackFune->getTiledMapPosition(),targetFune->getTiledMapPosition());
+            if(attackFune->withinRange(distance)){//攻撃範囲内ならば
+                targetFuneList.pushBack(targetFune);
+            }
+        }
+    }
+    
+    return std::move(targetFuneList);
+}
+
+bool SceneGameMain::checkWithinRangeFune(Fune *attackFune)
+{
+    for(auto& player:_playerList){
+        if(player->getFuneListContains(attackFune)){continue;}//自分は飛ばす
+        for(auto& targetFune:player->getFuneList()){
+            auto distance=_stage->getDistance(attackFune->getTiledMapPosition(),targetFune->getTiledMapPosition());
+            if(attackFune->withinRange(distance)){//攻撃範囲内ならば
+                return true;
+            }
+        }
+    }
+    
+    return false;
 }
 //end/fune関係
 
@@ -493,7 +523,7 @@ void SceneGameMain::createSettingWindow()
     //タイトルへ戻るボタンの設定
     auto titleButton=window->getChildByName<ui::Button*>("titleButton");
     titleButton->addTouchEventListener([this](Ref* pButton,ui::Widget::TouchEventType type){
-        auto button=dynamic_cast<ui::Button*>(pButton);
+        //auto button=dynamic_cast<ui::Button*>(pButton);
         if(type==ui::Widget::TouchEventType::BEGAN){
         }else if(type==ui::Widget::TouchEventType::ENDED){
             Director::getInstance()->getEventDispatcher()->removeAllEventListeners();//全てのイベントを無効化
@@ -659,8 +689,7 @@ void SceneGameMain::createHelpLayer(Fune *fune)
             case Fune::CharacterTypes::ENEMY_DEFENSE:
                 skillName->setString("アイロンシールド");
                 skillExplain->setString("一度だけ自船への攻撃を無効化する");
-                //skill=[this,fune](){this->skillIronShield(fune);};
-                skill=[this,fune](){this->skillDebug(fune);};
+                skill=[this,fune](){this->skillIronShield(fune);};
                 break;
                 
             case Fune::CharacterTypes::PC_ATTACK:
@@ -1050,6 +1079,7 @@ void SceneGameMain::normalAttack(Fune *attackFune,Fune *defenseFune)
     }));
 }
 
+
 std::string SceneGameMain::damageProcess(const Fune *attackFune,Fune *defenseFune)
 {
     int damage;//ダメージ
@@ -1058,14 +1088,14 @@ std::string SceneGameMain::damageProcess(const Fune *attackFune,Fune *defenseFun
     auto variance=this->generateRandomFloat(-0.5,0.5);//ダメージのぶれ
     auto varianceDamage=(baseDamage/10)*variance;//ベースダメージ±5%の範囲で変動
     //auto attackRoll=random(1,100);//攻撃の判定
-    auto attackRoll=this->generateRandomInt(0,100);//攻撃の判定
+    auto attackRoll=this->generateRandomInt(1,100);//攻撃の判定
     std::string string;//ダメージ表記に使用する文字列
     
     //クリティカルヒット10%
     //ミス10%
     if(attackRoll>90){
         damage=ceilf((baseDamage+varianceDamage)*2);//クリティカルでベースダメージ2倍
-    }else if(attackRoll<10){
+    }else if(attackRoll<=10){
         damage=0;//ミスならダメージ0;
     }else{
         damage=ceilf(baseDamage+varianceDamage);
@@ -1283,41 +1313,19 @@ bool SceneGameMain::deleteFune()
 
 void SceneGameMain::simulatePlay()
 {
-    auto player=this->getActivePlayer();
-    auto funeList=player->getFuneList();
-    
-    //攻撃範囲内に敵船がいれば攻撃する
-    for(auto& anotherPlayer:_playerList){
-        if(anotherPlayer==player){continue;}
-        auto targetFuneList=anotherPlayer->getFuneList();
-        for(auto& fune:funeList){
-            for(auto& targetFune:targetFuneList){
-                if(fune->withinRange(_stage->getDistance(fune->getTiledMapPosition(),
-                                                         targetFune->getTiledMapPosition()))){
-                    this->normalAttack(fune,targetFune);
-                    return;
-                }
-            }
+    this->scheduleOnce([this](float dt){
+        if(this->generateRandomInt(1,100)<=50){//5割の確率で回復を行うか判定
+            if(this->checkHeal()){return;}//回復が必要か
         }
-    }
-    
-    while(true){
-        auto index=random(0,static_cast<int>(funeList.size()-1));
-        auto fune=funeList.at(index);
-        for(int i=-fune->getMovement();i<=fune->getMovement();i++){
-            for(int j=-fune->getMovement();j<=fune->getMovement();j++){
-                auto position=fune->getTiledMapPosition()+Vec2(i,j);
-                if(_stage->getOnTiledMapFune(position)){continue;}
-                auto distance=_stage->getDistance(fune->getTiledMapPosition(),position);
-                if(distance<=fune->getMovement() && _stage->getAStar()->checkLine(fune->getTiledMapPosition(),
-                                                                                  position,fune->getMovement())){
-                    this->moveProcess(fune,position);
-                    return;
-                }
-            }
+        
+        if(this->generateRandomInt(1,100)<=30){//3割の確率でスキル使用判定
+            if(this->checkIronShield()){return;}//防御可能か
         }
-        funeList.eraseObject(fune);
-    }
+        
+        if(this->checkCommandAttack()){return;}//攻撃可能なら攻撃する
+        if(this->checkCommandMove()){return;}//移動可能なら移動する
+    },1,"simulatePlay");
+    
 }
 
 int SceneGameMain::generateRandomInt(int min,int max)
@@ -1332,3 +1340,277 @@ float SceneGameMain::generateRandomFloat(float min,float max)
     std::uniform_real_distribution<float> dest(min,std::nextafter(max,std::numeric_limits<float>::max()));
     return dest(_engine);
 }
+
+
+
+////条件式
+bool SceneGameMain::checkCommandBulletStorm()
+{
+    auto player=getActivePlayer();
+    int maxTargetCount=1;//最も多い攻撃対象の数
+    Fune* attackFune=nullptr;//最も多くを攻撃できる船
+    //バレットストームを使用可能な船があるか
+    for(auto& fune:player->getFuneList()){
+        if(fune->getType()==Fune::CharacterTypes::PC_ATTACK ||
+           fune->getType()==Fune::CharacterTypes::ENEMY_ATTACK){//バレットストームが使用可能な船か
+            if(fune->getSkillCount()>0){//スキルが使用可能か
+                auto targetFuneList=this->getWithinRangeFuneList(fune);
+                if(targetFuneList.size()>maxTargetCount){//より多くの船を攻撃できるか
+                    maxTargetCount=static_cast<int>(targetFuneList.size());
+                    attackFune=fune;
+                }
+            }
+        }
+    }
+    
+    if(attackFune){//バレットストームを使用可能な船がある
+        this->skillBulletStorm(attackFune);
+        return true;
+    }else{
+        return false;
+    }
+}
+
+bool SceneGameMain::checkCommandNormalAttack()
+{
+    auto player=this->getActivePlayer();//現在のプレイヤー
+    Fune* attackFune=nullptr;//攻撃する船
+    Fune* defenseFune=nullptr;//攻撃を受ける船
+    int minHP=INT_MAX;//攻撃対象になりうる船の中、最も低いHP
+    
+    for(auto& anotherPlayer:_playerList){
+        if(anotherPlayer==player){continue;}//自分は飛ばす
+        for(auto& targetFune:anotherPlayer->getFuneList()){
+            if(targetFune->getHp()>minHP){continue;}//HPが多いので飛ばす
+            int maxAttack=0;//攻撃する船の中、最も高い攻撃力
+            for(auto& fune:player->getFuneList()){
+                if(maxAttack>=fune->getAttack()){continue;}//攻撃力が低いので飛ばす
+                auto distance=_stage->getDistance(fune->getTiledMapPosition(),targetFune->getTiledMapPosition());
+                if(fune->withinRange(distance)){//攻撃範囲内ならば
+                    attackFune=fune;
+                    defenseFune=targetFune;
+                    minHP=targetFune->getHp();
+                    maxAttack=fune->getAttack();
+                }
+            }
+        }
+    }
+    
+    if(attackFune){//攻撃可能ならば
+        this->normalAttack(attackFune,defenseFune);
+        return true;
+    }else{
+        return false;
+    }
+}
+
+bool SceneGameMain::checkCommandAttack()
+{
+    auto player=this->getActivePlayer();//現在のプレイヤー
+    auto funeList=_stage->getFuneList();//全ての船
+    
+    Fune* attackFune=nullptr;//攻撃する船
+    Fune* defenseFune=nullptr;//攻撃を受ける船
+    int minHP=INT_MAX;//一番低いHP
+    int maxAttack=0;//一番高い攻撃力
+    auto maxCount=1;//一番多い攻撃対象
+    
+    for(auto& fune:player->getFuneList()){
+        int count=0;
+        for(auto& targetFune:funeList){
+            if(player->getFuneListContains(targetFune)){continue;}//プレイヤーに所属する船はスキップ
+            auto distance=_stage->getDistance(fune->getTiledMapPosition(),targetFune->getTiledMapPosition());
+            if(!fune->withinRange(distance)){continue;}//攻撃範囲外ならばスキップ
+            if(fune->getSkillCount()>0 && (fune->getType()==Fune::CharacterTypes::PC_ATTACK ||
+                                           fune->getType()==Fune::CharacterTypes::ENEMY_ATTACK)){
+                //スキルが使用可能かつスキルがバレットストームならば
+                count++;
+            }
+            if(count>maxCount){//バッレトストームが使える船の攻撃範囲により多くの船がある場合
+                maxCount=count;
+                attackFune=fune;
+            }else if(maxCount<2){//バレットストームの使用基準を満たす船がない場合
+                if(minHP<targetFune->getHp()){continue;}//よりHPが低い攻撃対象がいる
+                if(maxAttack>fune->getAttack()){continue;}//より攻撃力が高い船が攻撃する
+                minHP=targetFune->getHp();
+                maxAttack=fune->getAttack();
+                attackFune=fune;
+                defenseFune=targetFune;
+            }
+        }
+    }
+    
+    if(attackFune){
+        if(_turnActionPlusCount==0){//ハリーアップの効果が残っていない
+            if(this->checkHurryUp()){//使用できれば先に使用する
+                return true;
+            }
+        }
+        
+        if(maxCount>=2){//バレットストーム使用可能ならば
+            this->skillBulletStorm(attackFune);
+        }else{//通常攻撃可能ならば
+            this->normalAttack(attackFune,defenseFune);
+        }
+        return true;
+    }else{//攻撃できる対象がいない
+        return false;
+    }
+    /*
+    if(maxCount>=2){//バレットストーム使用可能ならば
+        this->skillBulletStorm(attackFune);
+        return true;
+    }else if(attackFune){//通常攻撃可能ならば
+        this->normalAttack(attackFune,defenseFune);
+        return true;
+    }else{//攻撃できる対象がいない
+        return false;
+    }*/
+}
+
+bool SceneGameMain::checkCommandMove()
+{
+    //船ごとの狙う優先順位、数値が高いほど狙われやすい
+    auto checkType=[](Fune* target)->int{
+        int value=0;
+        switch(target->getType()){
+            case Fune::CharacterTypes::PC_CAPTAIN:
+            case Fune::CharacterTypes::ENEMY_BOSS:
+                value=20;
+                break;
+                
+            case Fune::CharacterTypes::PC_SPEED:
+            case Fune::CharacterTypes::ENEMY_SPEED:
+                value=50;
+                break;
+                
+            case Fune::CharacterTypes::PC_DEFENSE:
+            case Fune::CharacterTypes::ENEMY_DEFENSE:
+                value=10;
+                break;
+                
+            case Fune::CharacterTypes::PC_ATTACK:
+            case Fune::CharacterTypes::ENEMY_ATTACK:
+                value=30;
+                break;
+                
+            default:
+                break;
+        }
+        
+        return value;
+    };
+    //船ごとの優先順位を考慮した確率に基づきターゲットを変える
+    auto switchTarget=[this,checkType](Fune* target,Fune* another)->Fune*{
+        auto value=checkType(target)-checkType(another)+50;//基本値50%+優先順位による補正
+        
+        if(this->generateRandomInt(1,100)<=value){
+            return target;
+        }else{
+            return another;
+        }
+    };
+    
+    auto player=this->getActivePlayer();//現在のプレイヤー
+    auto playerFuneList=player->getFuneList();//プレイヤーの船
+    
+    Fune* targetFune=nullptr;//狙う船
+    for(auto& tf:_stage->getFuneList()){
+        if(player->getFuneListContains(tf)){continue;}//自分は飛ばす
+        if(!targetFune){//ターゲットが設定されていない
+            targetFune=tf;
+        }else{//ターゲットが設定されている場合
+            targetFune=switchTarget(targetFune,tf);
+        }
+    }
+    
+    if(!targetFune){
+        log("ERROR SceneGameMain:checkCommandMove targetFune==nullptr");
+        return false;
+    }//ターゲットが決まっていない場合終了 仕様上この処理は行われない
+    
+    auto aStar=_stage->getAStar();
+    while(true){
+        if(playerFuneList.empty()){break;}//船がない場合break
+        auto index=this->generateRandomInt(0,static_cast<int>(playerFuneList.size()-1));//ランダムに船を選ぶ
+        auto fune=playerFuneList.at(index);
+        playerFuneList.eraseObject(fune);//vectorから除外
+        
+        player->setActiveFune(fune);
+        _stage->setAStarMap(fune,_stage->getFuneList());//探索マップを変更しておく zocを無視するために全ての船をプレイヤーの船として扱う
+        
+        //ターゲットへの最短ルートを調べる
+        auto moveList=aStar->search(fune->getTiledMapPosition(),
+                                                 targetFune->getTiledMapPosition(),
+                                                 aStar->getMaxCost()-1);
+        
+        if(moveList.empty()){continue;}//移動経路がない
+        _stage->setAStarMap(fune,player->getFuneList());//zocを考慮して移動を行う
+        for(int i=fune->getMovement();i>0;i--){//移動可能距離から徐々に移動距離を減らす
+            if(_stage->getOnTiledMapFune(moveList.at(i))){continue;}//座標に船がある場合は飛ばす
+            if(aStar->checkLine(moveList.at(0),moveList.at(i),fune->getMovement())){//移動可能であれば移動処理を行い終了
+                this->moveProcess(fune,moveList.at(i));
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+bool SceneGameMain::checkIronShield()
+{
+    auto player=this->getActivePlayer();
+    for(auto& fune:player->getFuneList()){
+        if(fune->getType()==Fune::CharacterTypes::PC_DEFENSE ||
+           fune->getType()==Fune::CharacterTypes::ENEMY_DEFENSE){
+            if(fune->getSkillCount()>0){
+                this->skillIronShield(fune);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool SceneGameMain::checkHeal()
+{
+    auto player=this->getActivePlayer();
+    Fune* skillFune=nullptr;//スキルを使用できる船
+    int minPercent=100;//最小のHP割合
+    
+    for(auto& fune:player->getFuneList()){
+        int percent=fune->getHp()*100/fune->getMaxHP();//HPの割合
+        if(percent<minPercent){minPercent=percent;}
+        if(fune->getType()==Fune::CharacterTypes::PC_CAPTAIN ||
+           fune->getType()==Fune::CharacterTypes::ENEMY_BOSS){
+            if(fune->getSkillCount()>0){
+                skillFune=fune;
+            }
+        }
+    }
+    
+    if(skillFune){
+        if(minPercent<60){
+            this->skillHeal(skillFune);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool SceneGameMain::checkHurryUp()
+{
+    auto player=this->getActivePlayer();
+    for(auto& fune:player->getFuneList()){
+        if(fune->getType()==Fune::CharacterTypes::PC_SPEED ||
+           fune->getType()==Fune::CharacterTypes::ENEMY_SPEED){//ハリーアップが使用できる船か
+            if(fune->getSkillCount()>0){//スキル仕様回数が残っている
+                this->skillHurryUp(fune);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+//end/条件式

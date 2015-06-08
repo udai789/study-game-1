@@ -168,6 +168,11 @@ void AStar::setAllMPointFlagFalse()
     }
 }
 
+bool AStar::getMPointFlag(const Vec2& position)
+{
+    return _mPoints.at(AStar::createKey(position))->getFlag();
+}
+
 void AStar::addPointCostVector(Vector<PointCost *> &pointCostVector,AStar::PointCost *pointCost)
 {
     if(pointCost->getTotalEstimateCost()>_hasCost){//コスト以内に移動できないため格納しない
@@ -237,19 +242,28 @@ std::vector<Vec2> AStar::searchN(AStar::PointCost *pointCost)
     auto left=position+Vec2(-1,0);//開始位置から左の座標
     auto right=position+Vec2(1,0);//開始位置から右の座標
     if(this->checkExistMPoint(up)){//点の存在する座標か
-        nextPosition.push_back(up);
+        if(!this->getMPointFlag(up)){
+            nextPosition.push_back(up);
+        }
     }
     if(this->checkExistMPoint(down)){
-        nextPosition.push_back(down);
+        if(!this->getMPointFlag(down)){
+            nextPosition.push_back(down);
+        }
     }
     if(this->checkExistMPoint(left)){
-        nextPosition.push_back(left);
+        if(!this->getMPointFlag(left)){
+            nextPosition.push_back(left);
+        }
     }
     if(this->checkExistMPoint(right)){
-        nextPosition.push_back(right);
+        if(!this->getMPointFlag(right)){
+            nextPosition.push_back(right);
+        }
     }
     
     Vector<PointCost*> pointCostVector;//現在の座標に隣接する座標のPointCost
+    
     //最短経路が存在する可能性のある座標のPointCostを作成
     for(int i=0;i<nextPosition.size();i++){
         auto next=nextPosition.at(i);
@@ -289,16 +303,24 @@ bool AStar::searchNCheckLine(AStar::PointCost *pointCost)
     auto left=position+Vec2(-1,0);//開始位置から左の座標
     auto right=position+Vec2(1,0);//開始位置から右の座標
     if(this->checkExistMPoint(up)){//点の存在する座標か
-        nextPosition.push_back(up);
+        if(!this->getMPointFlag(up)){
+           nextPosition.push_back(up);
+        }
     }
     if(this->checkExistMPoint(down)){
-        nextPosition.push_back(down);
+        if(!this->getMPointFlag(down)){
+            nextPosition.push_back(down);
+        }
     }
     if(this->checkExistMPoint(left)){
-        nextPosition.push_back(left);
+        if(!this->getMPointFlag(left)){
+            nextPosition.push_back(left);
+        }
     }
     if(this->checkExistMPoint(right)){
-        nextPosition.push_back(right);
+        if(!this->getMPointFlag(right)){
+            nextPosition.push_back(right);
+        }
     }
     
     Vector<PointCost*> pointCostVector;//現在の座標に隣接する座標のPointCost

@@ -22,7 +22,7 @@
 #include "cocos2d.h"
 
 
-#endif /* defined(__pirateTaxtics__AStar__) */
+
 
 //点を表すクラス
 class MPoint :public cocos2d::Ref
@@ -120,6 +120,11 @@ protected:
     
     void setAllMPointFlagFalse();//保持する全てのMPointのflagをfalseにする
     
+    //指定した座標の通過済みフラグを返す
+    //@param position 調べたい座標
+    //@return _flagの値
+    bool getMPointFlag(const cocos2d::Vec2& position);
+    
     /*totalEstimateCostが低い(同値ならばrealCostが低い)順になるようpointCostを格納する 
      *hasCostよりtotalEstimateCostが大きければ格納しない
      *@param pointCostVecotr pointCostを格納するvector
@@ -210,3 +215,5 @@ public:
     bool checkLine(const cocos2d::Vec2& startPosition,const cocos2d::Vec2& endPosition,
                    const int& hasCost);
 };
+
+#endif /* defined(__pirateTaxtics__AStar__) */

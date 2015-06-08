@@ -105,6 +105,7 @@ void Stage::createMap()
     map->setPosition(Vec2(MAP_POSITION_LEFT,size.height-MAP_POSITION_TOP));
     this->addChild(map);
     this->setTiledMap(map);
+    map->setVisible(false);//隠しておく
     ////*/枠と背景の作成
 }
 

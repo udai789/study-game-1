@@ -112,6 +112,16 @@ protected:
      *@param position 初期位置　タイルマップ上の座標
      */
     void createFune(Player* player,Fune::CharacterTypes characterType,const cocos2d::Vec2& position);
+    
+    //渡された船の攻撃範囲内にいる船のvectorを返す
+    //@param attackFune 攻撃する船
+    //@return 攻撃範囲内にいる船のvector
+    cocos2d::Vector<Fune*> getWithinRangeFuneList(Fune* attackFune);
+    
+    //渡された船の攻撃範囲内に船があるか
+    //@param attackFune 攻撃する船
+    //@return true:攻撃対象がいる
+    bool checkWithinRangeFune(Fune* attackFune);
     //end/fune関係
     
     
@@ -143,20 +153,6 @@ protected:
     //end/ターン処理関係
     
     
-    
-    /*船の移動処理を行う
-     *@param fune 移動する船
-     *@param position 移動するタイルマップ上の座標
-     */
-    void moveProcess(Fune* fune,const cocos2d::Vec2& position);
-    
-    /*攻撃を行う
-     *@param attackFune 攻撃を行う船
-     *@param defenseFune 攻撃を受ける船
-     */
-    void normalAttack(Fune* attackFune,Fune* defenseFune);
-    
-    
     /*ダメージ計算、結果の反映(hpへの適用など) 表示用のstringを返す
      *@param attackFune 攻撃を行う船
      *@param defenseFune 攻撃を受ける船
@@ -170,6 +166,19 @@ protected:
      *@param callFunc アニメーション終了時の処理
      */
     void damageAnimationProcess(Fune* targetFune,const std::string& string,cocos2d::CallFunc* callFunc);
+    
+    
+    /*船の移動処理を行う
+     *@param fune 移動する船
+     *@param position 移動するタイルマップ上の座標
+     */
+    void moveProcess(Fune* fune,const cocos2d::Vec2& position);
+    
+    /*攻撃を行う
+     *@param attackFune 攻撃を行う船
+     *@param defenseFune 攻撃を受ける船
+     */
+    void normalAttack(Fune* attackFune,Fune* defenseFune);
     
     
     
@@ -201,12 +210,6 @@ protected:
     //end/スキル関係
     
     
-    /*HPが0以下になった船があれば消去する
-     *@return true:船を消去した
-     */
-    bool deleteFune();
-    
-    void simulatePlay();//CPU操作
     
     /*指定した範囲の整数をランダムに生成する
      *@param min 最小値
@@ -221,6 +224,57 @@ protected:
      *@return 生成された値x min<=x<=max
      */
     float generateRandomFloat(float min,float max);
+    
+    
+    
+    
+    /*HPが0以下になった船があれば消去する
+     *@return true:船を消去した
+     */
+    bool deleteFune();
+    
+    void simulatePlay();//CPU操作
+    
+    
+    
+    ////条件式
+    //現在のプレイヤーがバレットストームを使うか判定 条件を満たせば使用しtrueを返す
+    //使用条件:スキル使用可能な船がある && その船がスキル使用可能な状態にある && その船の攻撃範囲内に2隻以上の敵船がある
+    //@return true:スキルを使用した(endTurn()を実行) false:スキルを使用しなかった(何もしない)
+    bool checkCommandBulletStorm();
+    
+    //現在のプレイヤーが通常攻撃を行うか判定　条件を満たせば実行しtrueを返す
+    //実行条件:攻撃範囲内に敵がいる船がある 複数いる場合は攻撃前のHPが一番低い敵に攻撃力が一番高い味方が攻撃
+    //@return true:通常攻撃を行った false:攻撃範囲内に敵がいなかった
+    bool checkCommandNormalAttack();
+    
+    //現在のプレイヤーが攻撃を行うか判定 通常攻撃かブレットストームを行う場合がある ハリーアップを使用する場合も有る
+    //実行条件:スキルを使用可能な船があり、使用可能な状態がある && その船の攻撃範囲内に2隻以上の敵がいる バレットストーム使用
+    //実行条件:攻撃範囲内に敵がおり、バレットストームを使用しなかった 通常攻撃
+    //@return true:攻撃を行った false:攻撃範囲内に敵がいなかった
+    bool checkCommandAttack();
+    
+    //現在のプレイヤーが船を移動させる
+    //実行条件:移動可能な船がある
+    //移動内容:移動可能な船が複数ある場合はランダムに選択。より遠くへの移動ほど確率が高い
+    //@return true:移動を行った false:移動できる船がなかった
+    bool checkCommandMove();
+    
+    //プレイヤーの船にアイロンシールドが使用可能な船があれば実行
+    //実行条件:アイロンシールドが使用可能な船があり、残り回数が残っている
+    //@return true:アイロンシールドを使用した false:使用しなかった
+    bool checkIronShield();
+    
+    //プレイヤーの船にセカンドウィンドが使用可能な船があり、残り回数があり、HPの減った味方がいれば実行
+    //実行条件:セカンドウィンドが使用可能な船があり、残り回数があり、HPが60%未満の味方がいる
+    //@return true:セカンドウィンドを使用した false:使用しなかった
+    bool checkHeal();
+    
+    //プレイヤーの船にハリーアップが使用可能な状態な船がある
+    //実行条件:ハリーアップが使用可能な船があり、残り回数が残っている
+    //@return true:ハリーアップを使用した flase:使用しなかった
+    bool checkHurryUp();
+    //end/条件式
     
 public:
     /*任意の番号のステージでシーンを作成します
@@ -241,8 +295,6 @@ public:
     CC_SYNTHESIZE_RETAIN(cocos2d::Layer*,_labelLayer,LabelLayer);//ラベルを置くレイヤー
     CC_SYNTHESIZE_RETAIN(cocos2d::Label*,_turnLabel,TurnLabel);//ターンを表示するラベル
     CC_SYNTHESIZE_RETAIN(cocos2d::Label*,_playerLabel,PlayerLabel);;//現在のプレイヤーを表示するラベル
-    
-    CC_SYNTHESIZE(Fune*,_cc,CC);
 };
 
 #endif /* defined(__pirateTaxtics__SceneGameMain__) */
