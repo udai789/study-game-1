@@ -14,24 +14,40 @@
 #include "Stage.h"
 #include "Player.h"
 
+
 class GameInitialise:public cocos2d::Ref
 {
+public:
+    enum class GameType{
+        VERSUS,//対戦モード
+        STORY1,//ストーリーモード
+        STORY2,
+        STORY3,
+        NONE
+    };
+    /*ゲームの初期化設定
+     *@param gameType ゲームモードの設定
+     *@param isPlayer2CPU player2がCPUか true:CPU
+     */
+    static GameInitialise* create(GameType gameType,bool isPlayer2CPU);
+    
+    CC_SYNTHESIZE_READONLY(GameType,_gameType,GameType);//ゲームモード
+    CC_SYNTHESIZE_READONLY(bool,_isPlayer2CPU,IsPlayer2CPU);//plyaer2がCPUか true:CPU
+    
+    //enumを文字列に変換
+    //@param enum
+    //@return 文字列
+    static std::string convertString(GameType gameType);
+    
+    //文字列をenumに変換
+    //@param 文字列
+    //@return enum
+    static GameInitialise::GameType convertGameType(std::string string);
+    
 protected:
     GameInitialise();
     virtual ~GameInitialise();
-    bool init(int stageNumber,bool isPlayer2CPU,bool isVersus);
-    
-public:
-    /*ゲームの初期化設定
-     *@param stageNumber ステージ番号　現在0のみ
-     *@param isPlayer2CPU player2がCPUか true:CPU
-     *@param isVersus 対戦モードか true:対戦モード false:ストーリーモード
-     */
-    static GameInitialise* create(int stageNumber,bool isPlayer2CPU,bool isVersus);
-    
-    CC_SYNTHESIZE_READONLY(int,_stageNumber,StageNumber);//ステージの番号 現状0のみ対応
-    CC_SYNTHESIZE_READONLY(bool,_isPlayer2CPU,IsPlayer2CPU);//plyaer2がCPUか true:CPU
-    CC_SYNTHESIZE_READONLY(bool,_isVersus,IsVersus);//対戦モードか true:対戦モード false:ストーリーモード
+    bool init(GameType gameType,bool isPlayer2CPU);
 };
 
 class SceneGameMain:public cocos2d::Layer

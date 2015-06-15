@@ -22,6 +22,7 @@ protected:
     
     void createTitleLayer();//タイトル画面を作成する
     void createVSLayer();//対戦選択画面を作成
+    void createStoryLayer();//ストーリーモード選択画面を作成
     
     /*SceneGameMainにシーン遷移する
      *@param gameInitialise ゲームの初期化設定

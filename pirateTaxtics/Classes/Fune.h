@@ -37,7 +37,7 @@ public:
     CC_SYNTHESIZE_READONLY(int,_defense,Defense);//防御力
     CC_SYNTHESIZE_READONLY(int,_maxHp,MaxHP);//最大HP
     CC_SYNTHESIZE_READONLY(int,_hp,Hp);//現在のHP
-    CC_SYNTHESIZE_READONLY(int,_skillCount,SkillCount);//スキル使用可能回数 1で初期化
+    CC_SYNTHESIZE_READONLY(int,_skillCount,SkillCount);//スキル使用可能回数
     
     CC_SYNTHESIZE(bool,_isInvincible,IsInvincible);//無敵状態かどうか
     
@@ -51,6 +51,16 @@ public:
      *@return 船
      */
     static Fune* createWithLevel(CharacterTypes type);
+    
+    //enumを文字列に変換する
+    //@param 変換するenum
+    //@return enumを文字列に変換した値
+    static std::string convertString(CharacterTypes type);
+    
+    //文字列をenumに変換する
+    //@param 変換する文字列
+    //@return 変換したenum
+    static CharacterTypes convertType(const std::string string);
     
     /*相手の船が攻撃範囲内か
      *@param distance 対象との距離

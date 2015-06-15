@@ -18,6 +18,7 @@ AppDelegate::AppDelegate() {
 
 AppDelegate::~AppDelegate() 
 {
+    
 }
 
 //if you want a different context,just modify the value of glContextAttrs
@@ -59,8 +60,10 @@ bool AppDelegate::applicationDidFinishLaunching() {
     // set FPS. the default value is 1.0/60 if you don't call this
     director->setAnimationInterval(1.0 / 60);
     
-    CocosDenshion::SimpleAudioEngine::getInstance()->setBackgroundMusicVolume(STANDARD_BGM_VOLUME);//bgm音量設定
-    CocosDenshion::SimpleAudioEngine::getInstance()->setEffectsVolume(STANDARD_EFFECTS_VOLUME);//効果音の音量
+    auto bgmVolume=UserDefault::getInstance()->getFloatForKey("BGMVolume",STANDARD_BGM_VOLUME);
+    auto effectVolume=UserDefault::getInstance()->getFloatForKey("EffectVolume",STANDARD_EFFECTS_VOLUME);
+    CocosDenshion::SimpleAudioEngine::getInstance()->setBackgroundMusicVolume(bgmVolume);//bgm音量設定
+    CocosDenshion::SimpleAudioEngine::getInstance()->setEffectsVolume(effectVolume);//効果音の音量
 
     // create a scene. it's an autorelease object
     //auto scene = HelloWorld::createScene();

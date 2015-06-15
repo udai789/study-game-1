@@ -7,6 +7,8 @@
 //
 
 #include "Fune.h"
+#include "json/rapidjson.h"
+#include "json/document.h"
 
 USING_NS_CC;
 
@@ -14,12 +16,9 @@ USING_NS_CC;
 const int FRAME_COUNT=8;
 //通常状態のフレーム数
 const int NORMAL_FRAME_COUNT=4;
-//キャラ数
-const int CHARACTER_COUNT=8;
 
 Fune::Fune()
-:_skillCount(1)
-,_isInvincible(false)
+:_isInvincible(false)
 ,_hpGauge(nullptr)
 {
     
@@ -44,6 +43,12 @@ Fune* Fune::createWithLevel(Fune::CharacterTypes type)
 
 bool Fune::initWithLevel(Fune::CharacterTypes type)
 {
+    auto typeString=Fune::convertString(type);
+    auto jsonData=FileUtils::getInstance()->getStringFromFile("json/UnitData.json");
+    rapidjson::Document docJson;
+    docJson.Parse<rapidjson::kParseDefaultFlags>(jsonData.data());
+    if(docJson.HasParseError()){return false;}//parseに失敗
+    
     if(!Sprite::initWithFile("images/ships.png")){
         return false;
     }
@@ -52,55 +57,19 @@ bool Fune::initWithLevel(Fune::CharacterTypes type)
     _type=type;
     
     ///ステータスを設定
-    switch (type) {
-        case CharacterTypes::PC_CAPTAIN:
-        case CharacterTypes::ENEMY_BOSS:
-            _movement=4;
-            _range=3;
-            _attack=100;
-            _defense=50;
-            _maxHp=120;
-            _hp=_maxHp;
-            break;
-            
-        case CharacterTypes::PC_SPEED:
-        case CharacterTypes::ENEMY_SPEED:
-            _movement=5;
-            _range=3;
-            _attack=80;
-            _defense=60;
-            _maxHp=80;
-            _hp=_maxHp;
-            break;
-            
-        case CharacterTypes::PC_DEFENSE:
-        case CharacterTypes::ENEMY_DEFENSE:
-            _movement=3;
-            _range=3;
-            _attack=80;
-            _defense=60;
-            _maxHp=240;
-            _hp=_maxHp;
-            break;
-            
-        case CharacterTypes::PC_ATTACK:
-        case CharacterTypes::ENEMY_ATTACK:
-            _movement=3;
-            _range=3;
-            _attack=120;
-            _defense=40;
-            _maxHp=150;
-            _hp=_maxHp;
-            break;
-            
-        default:
-            break;
-    }
+    _movement=docJson[typeString.data()]["movement"].GetInt();
+    _range=docJson[typeString.data()]["range"].GetInt();
+    _attack=docJson[typeString.data()]["attack"].GetInt();
+    _defense=docJson[typeString.data()]["defense"].GetInt();
+    _maxHp=docJson[typeString.data()]["maxHP"].GetInt();
+    _hp=_maxHp;
+    _skillCount=docJson[typeString.data()]["skillCount"].GetInt();
     //*/ステータスを設定
     
     ////キャラクターの基本アニメーション作成
     //1フレームの画面サイズを取得する
-    auto frameSize=Size(this->getContentSize().width/FRAME_COUNT,this->getContentSize().height/CHARACTER_COUNT);
+    auto frameSize=Size(this->getContentSize().width/FRAME_COUNT,
+                        this->getContentSize().height/static_cast<float>(Fune::CharacterTypes::COUNT));
     //テクスチャの大きさを1フレーム分にする
     this->setTextureRect(Rect(0,0,frameSize.width,frameSize.height));
     
@@ -139,8 +108,78 @@ bool Fune::initWithLevel(Fune::CharacterTypes type)
     this->addChild(hpGreen);
     this->setHpGauge(hpGreen);
     //*/HPゲージの作成
-    
     return true;
+}
+
+std::string Fune::convertString(Fune::CharacterTypes type)
+{
+    std::string string;
+    switch(type){
+        case CharacterTypes::PC_CAPTAIN:
+            string="PC_CAPTAIN";
+            break;
+            
+        case CharacterTypes::PC_DEFENSE:
+            string="PC_DEFENSE";
+            break;
+            
+        case CharacterTypes::PC_SPEED:
+            string="PC_SPEED";
+            break;
+            
+        case CharacterTypes::PC_ATTACK:
+            string="PC_ATTACK";
+            break;
+            
+        case CharacterTypes::ENEMY_BOSS:
+            string="ENEMY_BOSS";
+            break;
+            
+        case CharacterTypes::ENEMY_DEFENSE:
+            string="ENEMY_DEFENSE";
+            break;
+            
+        case CharacterTypes::ENEMY_SPEED:
+            string="ENEMY_SPEED";
+            break;
+            
+        case CharacterTypes::ENEMY_ATTACK:
+            string="ENEMY_ATTACK";
+            break;
+            
+        default:
+            string="ERROR NOT SETTING TYPE";
+            break;
+    }
+    
+    return string;
+}
+
+Fune::CharacterTypes Fune::convertType(const std::string string)
+{
+    Fune::CharacterTypes type;
+    if(string=="PC_CAPTAIN"){
+        type=CharacterTypes::PC_CAPTAIN;
+    }else if(string=="PC_DEFENSE"){
+        type=CharacterTypes::PC_DEFENSE;
+    }else if(string=="PC_SPEED"){
+        type=CharacterTypes::PC_SPEED;
+    }else if(string=="PC_ATTACK"){
+        type=CharacterTypes::PC_ATTACK;
+    }else if(string=="ENEMY_BOSS"){
+        type=CharacterTypes::ENEMY_BOSS;
+    }else if(string=="ENEMY_DEFENSE"){
+        type=CharacterTypes::ENEMY_DEFENSE;
+    }else if(string=="ENEMY_SPEED"){
+        type=CharacterTypes::ENEMY_SPEED;
+    }else if(string=="ENEMY_ATTACK"){
+        type=CharacterTypes::ENEMY_ATTACK;
+    }else{
+        log("Fune.cpp Fune::convertString Error string is not CharacterTypes");
+        type=CharacterTypes::COUNT;
+    }
+    
+    return type;
 }
 
 bool Fune::withinRange(int distance)

@@ -96,6 +96,7 @@ bool Title::init()
 
 void Title::onEnterTransitionDidFinish(){
     Layer::onEnterTransitionDidFinish();
+    CocosDenshion::SimpleAudioEngine::getInstance()->stopBackgroundMusic();//BGMを停止
 }
 
 void Title::createTitleLayer()
@@ -126,7 +127,27 @@ void Title::createTitleLayer()
     });
     
     auto storyButton=window->getChildByName<ui::Button*>("storyButton");
-    storyButton->setVisible(false);//現状消しておく
+    storyButton->addTouchEventListener([this,window](Ref* pButton,ui::Widget::TouchEventType type){
+        auto button=dynamic_cast<ui::Button*>(pButton);
+        switch(type){
+            case cocos2d::ui::Widget::TouchEventType::BEGAN:
+                button->setColor(Color3B::GRAY);
+                break;
+                
+            case cocos2d::ui::Widget::TouchEventType::ENDED:
+                window->removeFromParent();
+                CocosDenshion::SimpleAudioEngine::getInstance()->playEffect("sound/se2.wav");
+                this->createStoryLayer();
+                break;
+                
+            case cocos2d::ui::Widget::TouchEventType::CANCELED:
+                button->setColor(Color3B::WHITE);
+                break;
+                
+            default:
+                break;
+        }
+    });
     
     this->addChild(window);
 }
@@ -145,7 +166,7 @@ void Title::createVSLayer()
             button->setColor(Color3B::WHITE);
         }else if(type==ui::Widget::TouchEventType::ENDED){
             CocosDenshion::SimpleAudioEngine::getInstance()->playEffect("sound/se2.wav");
-            this->turnScene(GameInitialise::create(0,false,true));
+            this->turnScene(GameInitialise::create(GameInitialise::GameType::VERSUS,false));
         }
     });
     
@@ -159,9 +180,49 @@ void Title::createVSLayer()
             button->setColor(Color3B::WHITE);
         }else if(type==ui::Widget::TouchEventType::ENDED){
             CocosDenshion::SimpleAudioEngine::getInstance()->playEffect("sound/se2.wav");
-            this->turnScene(GameInitialise::create(0,true,true));
+            this->turnScene(GameInitialise::create(GameInitialise::GameType::VERSUS,true));
         }
     });
+    
+    this->addChild(window);
+}
+
+void Title::createStoryLayer()
+{
+    auto window=CSLoader::getInstance()->createNode("StoryLayer.csb");
+    
+    auto newButton=window->getChildByName<ui::Button*>("newButton");
+    newButton->addTouchEventListener([this](Ref* pButton,ui::Widget::TouchEventType type){
+        auto button=dynamic_cast<ui::Button*>(pButton);
+        
+        if(type==ui::Widget::TouchEventType::BEGAN){
+            button->setColor(Color3B::GRAY);
+        }else if(type==ui::Widget::TouchEventType::CANCELED){
+            button->setColor(Color3B::WHITE);
+        }else if(type==ui::Widget::TouchEventType::ENDED){
+            CocosDenshion::SimpleAudioEngine::getInstance()->playEffect("sound/se2.wav");
+            this->turnScene(GameInitialise::create(GameInitialise::GameType::STORY1,true));
+        }
+    });
+    
+    auto story=UserDefault::getInstance()->getIntegerForKey("STORYKEY",static_cast<int>(GameInitialise::GameType::NONE));
+    auto loadButton=window->getChildByName<ui::Button*>("loadButton");
+    loadButton->addTouchEventListener([this,story](Ref* pButton,ui::Widget::TouchEventType type){
+        auto button=dynamic_cast<ui::Button*>(pButton);
+        
+        if(type==ui::Widget::TouchEventType::BEGAN){
+            button->setColor(Color3B::GRAY);
+        }else if(type==ui::Widget::TouchEventType::CANCELED){
+            button->setColor(Color3B::WHITE);
+        }else if(type==ui::Widget::TouchEventType::ENDED){
+            CocosDenshion::SimpleAudioEngine::getInstance()->playEffect("sound/se2.wav");
+            this->turnScene(GameInitialise::create(static_cast<GameInitialise::GameType>(story),true));
+        }
+    });
+    if(static_cast<GameInitialise::GameType>(story)==GameInitialise::GameType::NONE){
+        loadButton->setEnabled(false);
+        loadButton->setColor(Color3B::GRAY);
+    }
     
     this->addChild(window);
 }

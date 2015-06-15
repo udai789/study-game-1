@@ -16,6 +16,8 @@
 #include "cocostudio/CocoStudio.h"
 #include "ui/CocosGUI.h"
 #include "Title.h"
+#include "json/rapidjson.h"
+#include "json/document.h"
 
 USING_NS_CC;
 
@@ -33,10 +35,10 @@ GameInitialise::~GameInitialise()
     
 }
 
-GameInitialise* GameInitialise::create(int stageNumber,bool isPlayer2CPU,bool isVersus)
+GameInitialise* GameInitialise::create(GameInitialise::GameType gameType,bool isPlayer2CPU)
 {
     GameInitialise* ret=new GameInitialise();
-    if(ret->init(stageNumber,isPlayer2CPU,isVersus)){
+    if(ret->init(gameType,isPlayer2CPU)){
         ret->autorelease();
         return ret;
     }
@@ -45,14 +47,52 @@ GameInitialise* GameInitialise::create(int stageNumber,bool isPlayer2CPU,bool is
     return nullptr;
 }
 
-bool GameInitialise::init(int stageNumber,bool isPlayer2CPU,bool isVersus)
+bool GameInitialise::init(GameInitialise::GameType gameType,bool isPlayer2CPU)
 {
-    if(stageNumber!=0){return false;}
-    _stageNumber=stageNumber;
+    _gameType=gameType;
     _isPlayer2CPU=isPlayer2CPU;
-    _isVersus=isVersus;
     
     return true;
+}
+
+std::string GameInitialise::convertString(GameInitialise::GameType gameType)
+{
+    std::string string;
+    switch(gameType){
+        case GameType::VERSUS:
+            string="VERSUS";
+            break;
+        case GameType::STORY1:
+            string="STORY1";
+            break;
+        case GameType::STORY2:
+            string="STORY2";
+            break;
+        case GameType::STORY3:
+            string="STORY3";
+            break;
+        default:
+            string="NONE";
+            break;
+    }
+    return string;
+}
+
+GameInitialise::GameType GameInitialise::convertGameType(std::string string)
+{
+    GameInitialise::GameType gameType;
+    if(string=="VERSUS"){
+        gameType=GameInitialise::GameType::VERSUS;
+    }else if(string=="STORY1"){
+        gameType=GameInitialise::GameType::STORY1;
+    }else if(string=="STORY2"){
+        gameType=GameInitialise::GameType::STORY2;
+    }else if(string=="STORY3"){
+        gameType=GameInitialise::GameType::STORY3;
+    }else{
+        gameType=GameInitialise::GameType::NONE;
+    }
+    return gameType;
 }
 //end/GameInitialise
 
@@ -75,7 +115,6 @@ SceneGameMain::SceneGameMain()
 
 SceneGameMain::~SceneGameMain()
 {
-    CocosDenshion::SimpleAudioEngine::getInstance()->stopBackgroundMusic();//BGMを停止
     CC_SAFE_RELEASE_NULL(_gameInitialise);
     CC_SAFE_RELEASE_NULL(_stage);
     CC_SAFE_RELEASE_NULL(_labelLayer);
@@ -110,6 +149,18 @@ bool SceneGameMain::initWithGameInitialise(GameInitialise *gameInitialise)
     this->createMap();
     this->createLabelLayer();//ラベルレイヤーを作成
     this->createPlayers();//プレイヤーを作成
+    
+    auto gType=_gameInitialise->getGameType();
+    switch(gType){
+        case GameInitialise::GameType::STORY1:
+        case GameInitialise::GameType::STORY2:
+        case GameInitialise::GameType::STORY3:
+            UserDefault::getInstance()->setIntegerForKey("STORYKEY",static_cast<int>(gType));
+            break;
+            
+        default:
+            break;
+    }
     
     //CocosDenshion::SimpleAudioEngine::getInstance()->setBackgroundMusicVolume(STANDARD_BGM_VOLUME);//bgm音量設定
     //CocosDenshion::SimpleAudioEngine::getInstance()->setEffectsVolume(STANDARD_EFFECTS_VOLUME);//効果音の音量
@@ -230,7 +281,7 @@ void SceneGameMain::onEnterTransitionDidFinish()
 ////stage関係
 void SceneGameMain::createMap()
 {
-    auto stage=Stage::createWithLevel(_gameInitialise->getStageNumber());
+    auto stage=Stage::createWithLevel(0);
     this->addChild(stage,static_cast<int>(LayerZPositions::STAGE));
     this->setStage(stage);
 }
@@ -240,22 +291,35 @@ void SceneGameMain::createMap()
 ////player関係
 void SceneGameMain::createPlayers()
 {
-    //船初期配置 vec2(0,8) vec2(12,0)
-    Vec2 stagePosition[2][4]={{Vec2(0,8),Vec2(0,6),Vec2(1,7),Vec2(2,8)},
-        {Vec2(12,0),Vec2(10,0),Vec2(11,1),Vec2(12,2)}};
+    auto gameString=GameInitialise::convertString(_gameInitialise->getGameType());
+    auto jsonData=FileUtils::getInstance()->getStringFromFile("json/gameType.json");
+    rapidjson::Document docJson;
+    docJson.Parse<rapidjson::kParseDefaultFlags>(jsonData.data());
+    if(docJson.HasParseError()){//parseに失敗
+        log("SceneGameMain.cpp SceneGameMain::createPlayer json parse error");
+        return;
+    }
     
     auto player1=Player::create(false);
     this->addPlayerList(player1);
     //プレイヤー側のキャラは0-3番
-    for(auto i=0;i<4;i++){
-        this->createFune(player1,static_cast<Fune::CharacterTypes>(i),stagePosition[0][i]);
+    for(auto i=0;i<docJson[gameString.data()]["player1"].Size();i++){
+        this->createFune(player1,
+                         Fune::convertType(docJson[gameString.data()]["player1"][i]["typeName"].GetString()),
+                         Vec2(docJson[gameString.data()]["player1"][i]["x"].GetInt(),
+                              docJson[gameString.data()]["player1"][i]["y"].GetInt())
+        );
     }
     
     auto player2=Player::create(_gameInitialise->getIsPlayer2CPU());
     this->addPlayerList(player2);
     //相手側のキャラは4-7番
-    for(auto i=4;i<8;i++){
-        this->createFune(player2,static_cast<Fune::CharacterTypes>(i),stagePosition[1][i-4]);
+    for(auto i=0;i<docJson[gameString.data()]["player2"].Size();i++){
+        this->createFune(player2,
+                         Fune::convertType(docJson[gameString.data()]["player2"][i]["typeName"].GetString()),
+                         Vec2(docJson[gameString.data()]["player2"][i]["x"].GetInt(),
+                              docJson[gameString.data()]["player2"][i]["y"].GetInt())
+                         );
     }
 }
 
@@ -512,6 +576,10 @@ void SceneGameMain::createSettingWindow()
             button->setColor(Color3B::GRAY);
         }else if(type==ui::Widget::TouchEventType::ENDED){//タッチ終了
             Director::getInstance()->getEventDispatcher()->removeEventListenersForTarget(settingLayer);//レイヤーのイベント削除
+            UserDefault::getInstance()->setFloatForKey("BGMVolume",
+                                                       CocosDenshion::SimpleAudioEngine::getInstance()->getBackgroundMusicVolume());
+            UserDefault::getInstance()->setFloatForKey("EffectVolume",
+                                                       CocosDenshion::SimpleAudioEngine::getInstance()->getEffectsVolume());
             settingLayer->removeFromParent();//レイヤーを消す
             Director::getInstance()->resume();//再開
             audio->resumeAllEffects();//効果音再開
@@ -527,6 +595,10 @@ void SceneGameMain::createSettingWindow()
         if(type==ui::Widget::TouchEventType::BEGAN){
         }else if(type==ui::Widget::TouchEventType::ENDED){
             Director::getInstance()->getEventDispatcher()->removeAllEventListeners();//全てのイベントを無効化
+            UserDefault::getInstance()->setFloatForKey("BGMVolume",
+                                                       CocosDenshion::SimpleAudioEngine::getInstance()->getBackgroundMusicVolume());
+            UserDefault::getInstance()->setFloatForKey("EffectVolume",
+                                                       CocosDenshion::SimpleAudioEngine::getInstance()->getEffectsVolume());
             Director::getInstance()->getActionManager()->pauseAllRunningActions();//全てのアクションを停止
             Director::getInstance()->getActionManager()->removeAllActions();//全てのアクションを削除
             CocosDenshion::SimpleAudioEngine::getInstance()->stopAllEffects();//全ての効果音を終了
@@ -690,6 +762,7 @@ void SceneGameMain::createHelpLayer(Fune *fune)
                 skillName->setString("アイロンシールド");
                 skillExplain->setString("一度だけ自船への攻撃を無効化する");
                 skill=[this,fune](){this->skillIronShield(fune);};
+                //skill=[this,fune](){this->skillDebug(fune);};
                 break;
                 
             case Fune::CharacterTypes::PC_ATTACK:
@@ -943,12 +1016,38 @@ bool SceneGameMain::endGame()
             layer->addChild(label2);
         }
         
-        auto label3=Label::createWithSystemFont("タイトルへ","Arial",48);
+        auto gameString=GameInitialise::convertString(_gameInitialise->getGameType());
+        auto jsonData=FileUtils::getInstance()->getStringFromFile("json/gameType.json");
+        rapidjson::Document docJson;
+        docJson.Parse<rapidjson::kParseDefaultFlags>(jsonData.data());
+        if(docJson.HasParseError()){//parseに失敗
+            log("SceneGameMain.cpp SceneGameMain::endGame json parse error");
+            return true;
+        }
+        
+        auto pNumber=this->getActivePlayerIndex();
+        Label* label3;
+        auto gameType=GameInitialise::GameType::NONE;
+        switch(_gameInitialise->getGameType()){
+            case GameInitialise::GameType::STORY1:
+            case GameInitialise::GameType::STORY2:
+                if(!pNumber){
+                    label3=Label::createWithSystemFont(docJson[gameString.data()]["next"].GetString(),"Arial",48);
+                    gameType=GameInitialise::convertGameType(docJson[gameString.data()]["next"].GetString());
+                    break;
+                }
+            case GameInitialise::GameType::STORY3:
+            case GameInitialise::GameType::VERSUS:
+            default:
+                label3=Label::createWithSystemFont("タイトルへ","Arial",48);
+                break;
+        }
+        
         label3->setColor(Color3B::RED);
         label3->setPosition(Vec2(winSize.width/2,winSize.height/2-200));
         label3->setOpacity(0);
         layer->addChild(label3);
-        scheduleOnce([this,layer,label3](float dt){
+        scheduleOnce([this,layer,label3,gameType,pNumber](float dt){
             label3->runAction(RepeatForever::create(Sequence::create(
                                                                      FadeIn::create(1),
                                                                      FadeOut::create(1),
@@ -958,11 +1057,21 @@ bool SceneGameMain::endGame()
             listener->onTouchBegan=[](Touch* touch,Event* event){
                 return true;
             };
-            listener->onTouchEnded=[this,layer](Touch* touch,Event* event){
+            listener->onTouchEnded=[this,layer,gameType,pNumber](Touch* touch,Event* event){
                 this->getEventDispatcher()->removeAllEventListeners();//イベントを無効化しておく
                 this->runAction(Sequence::create(DelayTime::create(0.5),
-                                                 CallFunc::create([]{
-                    auto scene=Title::createScene();
+                                                 CallFunc::create([gameType,pNumber]{
+                    Scene* scene;
+                    if(!pNumber && gameType!=GameInitialise::GameType::NONE){
+                        scene=SceneGameMain::createSceneWithGameInitialise(
+                                                                           GameInitialise::create(
+                                                                                                  gameType,
+                                                                                                  true)
+                                                                           );
+
+                    }else{
+                        scene=Title::createScene();
+                    }
                     auto transition=TransitionSplitRows::create(1,scene);
                     Director::getInstance()->replaceScene(transition);
                 }),NULL));
